@@ -2,6 +2,8 @@
 
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
+import DateRangeField from './DateRangeField';
+import GuestsField from './GuestsField';
 
 type Slide = { image: string; caption?: string };
 
@@ -86,34 +88,20 @@ function SearchBar({ search }: { search?: { placeholder?: string; cta?: string }
   return (
     <form
       action="/villalar"
-      className="mt-12 grid gap-px overflow-hidden rounded-2xl bg-line/60 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.45)] sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_0.9fr_auto]"
+      className="mt-12 grid gap-px overflow-visible rounded-2xl bg-line/60 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.45)] sm:grid-cols-2 lg:grid-cols-[1.4fr_1.6fr_0.9fr_auto]"
     >
-      <Field label="Nereye">
+      <Field label="Nereye" className="rounded-t-2xl sm:rounded-tl-2xl sm:rounded-tr-none lg:rounded-l-2xl lg:rounded-r-none">
         <input
           name="q"
           placeholder={search?.placeholder ?? 'Bölge veya villa adı'}
           className="w-full bg-transparent text-[0.95rem] text-ink outline-none placeholder:text-muted/70"
         />
       </Field>
-      <Field label="Giriş">
-        <input name="from" type="date" className="w-full bg-transparent text-[0.95rem] text-ink outline-none" />
-      </Field>
-      <Field label="Çıkış">
-        <input name="to" type="date" className="w-full bg-transparent text-[0.95rem] text-ink outline-none" />
-      </Field>
-      <Field label="Misafir">
-        <input
-          name="guests"
-          type="number"
-          min={1}
-          max={30}
-          defaultValue={2}
-          className="w-full bg-transparent text-[0.95rem] text-ink outline-none"
-        />
-      </Field>
+      <DateRangeField />
+      <GuestsField className="sm:col-span-2 lg:col-span-1" />
       <button
         type="submit"
-        className="bg-ink px-8 py-5 text-[0.95rem] text-canvas transition-colors hover:bg-olive lg:px-10"
+        className="bg-ink px-8 py-5 text-[0.95rem] text-canvas transition-colors hover:bg-olive sm:col-span-2 sm:rounded-b-2xl lg:col-span-1 lg:rounded-b-none lg:rounded-r-2xl lg:px-10"
       >
         {search?.cta ?? 'Villa ara'}
       </button>
@@ -121,9 +109,17 @@ function SearchBar({ search }: { search?: { placeholder?: string; cta?: string }
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  className = '',
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <label className="flex flex-col gap-1.5 bg-surface px-6 py-4 transition-colors focus-within:bg-sand/50">
+    <label className={`flex flex-col gap-1.5 bg-surface px-6 py-4 transition-colors focus-within:bg-sand/50 ${className}`}>
       <span className="eyebrow text-muted">{label}</span>
       {children}
     </label>
