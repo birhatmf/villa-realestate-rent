@@ -1,0 +1,397 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Site geneli ayarlar. key: "footer", ileride "header", "seo"…
+model Setting {
+  key       String   @id
+  value     Json     @default("{}")
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  GUEST
+  HOST
+  ADMIN
+}
+
+/// Tek tablo + rol: bir üye hem misafir hem ev sahibi olabilir,
+/// ikinci bir auth sistemi gerekmez.
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String
+  phone          String?
+  passwordHash   String
+  role           Role      @default(GUEST)
+  active         Boolean   @default(true)
+  kvkkAcceptedAt DateTime?
+  marketingOptIn Boolean   @default(false)
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  villas    Villa[]
+  favorites Favorite[]
+
+  @@index([role, active])
+  @@index([createdAt])
+}
+
+/// Admin panelinden yönetilen sayfalar. Ana sayfa = slug "home".
+model Page {
+  id             String    @id @default(cuid())
+  slug           String    @unique
+  title          String
+  seoTitle       String?
+  seoDescription String?
+  sections       Section[]
+  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime  @default(now())
+}
+
+/// Sayfayı oluşturan sıralı bloklar. `content` blok tipine göre serbest JSON;
+/// dinamik bloklar (featuredVillas, regionGrid) sadece sorgu parametresi tutar,
+/// veriyi PagesService hydrate eder.
+model Section {
+  id      String  @id @default(cuid())
+  pageId  String
+  page    Page    @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  type    String
+  order   Int
+  visible Boolean @default(true)
+  content Json    @default("{}")
+
+  @@index([pageId, order])
+}
+
+model Region {
+  id       String  @id @default(cuid())
+  slug     String  @unique
+  name     String
+  subtitle String?
+  image    String
+  order    Int     @default(0)
+  villas   Villa[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+/// Pazarlama/kürasyon koleksiyonları (Balayı, Denize sıfır, Kış konaklaması…).
+/// Region'dan farkı: bir villa TEK bölgeye ait ama BİRDEN FAZLA konsepte
+/// girebilir (m2m) — "Balayı" + "Denize sıfır" aynı anda olabilir.
+model Concept {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  name        String
+  subtitle    String?
+  description String?
+  image       String
+  order       Int     @default(0)
+  villas      Villa[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum VillaStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+}
+
+enum BuildingType {
+  DETACHED
+  SEMI_DETACHED
+  SITE
+  STONE_HOUSE
+  BUNGALOW
+}
+
+enum PoolType {
+  NONE
+  PRIVATE
+  SHARED
+  INFINITY
+}
+
+enum PetPolicy {
+  NOT_ALLOWED
+  ALLOWED_FREE
+  ALLOWED_FEE
+}
+
+enum BedType {
+  DOUBLE
+  TWIN
+  SINGLE
+  BUNK
+  SOFA_BED
+}
+
+enum ImageCategory {
+  LIVING_KITCHEN
+  POOL_GARDEN
+  BEDROOM
+  EXTERIOR_VIEW
+  OTHER
+}
+
+model Villa {
+  id       String  @id @default(cuid())
+  slug     String  @unique
+  title    String
+  summary  String?
+  regionId String
+  region   Region  @relation(fields: [regionId], references: [id])
+  district String?
+
+  status VillaStatus @default(DRAFT)
+  hostId String?
+  host   User?       @relation(fields: [hostId], references: [id])
+
+  buildingType BuildingType
+  /// T.C. Kültür ve Turizm Bakanlığı Turizm Amaçlı Konut İzin Belge No —
+  /// detay sayfasındaki zorunlu Bakanlık rozetinde gösterilir.
+  permitNumber String?
+  maxAdults    Int
+  maxChildren  Int          @default(0)
+  maxInfants   Int          @default(0)
+  /// maxAdults+maxChildren'dan servis katmanında otomatik hesaplanır —
+  /// mevcut kart bileşenleri ("8 kişi") değişmeden çalışsın diye ayrı tutuluyor.
+  capacity     Int
+  bedrooms     Int
+  bathrooms    Int
+
+  poolType             PoolType @default(NONE)
+  poolSecluded         Boolean  @default(false)
+  poolHeated           Boolean  @default(false)
+  poolHeatingIncluded  Boolean  @default(true)
+  poolHeatingFeePerDay Int?
+  poolHasChildPool     Boolean  @default(false)
+  poolLengthM          Float?
+  poolWidthM           Float?
+  poolDepthM           Float?
+
+  wifiMbps       Int?
+  beachDistanceM Int?
+  nearCenter     Boolean  @default(false)
+  /// 'sea' | 'nature' — amenities ile aynı serbest tag-bag deseni.
+  viewTags       String[]
+  amenities      String[]
+
+  pricePerNight              Int
+  currency                   String  @default("TRY")
+  minNights                  Int     @default(1)
+  /// Bu eşiğin ALTINDAKİ konaklamalarda cleaningFee uygulanır, üstünde uygulanmaz.
+  cleaningFee                Int     @default(0)
+  cleaningFeeThresholdNights Int     @default(7)
+  depositAmount              Int     @default(0)
+  utilitiesIncluded          Boolean @default(true)
+  gasIncluded                Boolean @default(true)
+  extraCleaningFee           Int?
+
+  petPolicy             PetPolicy @default(NOT_ALLOWED)
+  petNote               String?
+  familiesOnly          Boolean   @default(false)
+  allowSingleMaleGroups Boolean   @default(true)
+  allowYoungGroups      Boolean   @default(true)
+  eventsAllowed         Boolean   @default(false)
+  smokingAllowed        Boolean   @default(false)
+  checkInTime           String    @default("16:00")
+  checkOutTime          String    @default("10:00")
+  /// 0=Pazar..6=Cumartesi, null = kısıt yok.
+  checkInWeekday        Int?
+
+  videoUrl       String?
+  /// Yüzde (örn. 20.0). Boşsa Setting['payments'].defaultCommissionRate kullanılır.
+  /// Yalnızca admin ayarlar — host-villas.controller.ts bu alanı DTO'dan düşürür.
+  commissionRate Float?
+  reviewNote     String?
+  reviewedAt     DateTime?
+  reviewedBy     String?
+
+  rating      Float   @default(0)
+  reviewCount Int     @default(0)
+  featured    Boolean @default(false)
+
+  rooms        VillaRoom[]
+  concepts     Concept[]
+  images       VillaImage[]
+  favorites    Favorite[]
+  priceRules   VillaPriceRule[]
+  blockedDates VillaBlockedDate[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, featured])
+  @@index([hostId])
+}
+
+model VillaRoom {
+  id      String @id @default(cuid())
+  villaId String
+  villa   Villa  @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  order   Int
+
+  bedType    BedType
+  bedCount   Int     @default(1)
+  hasEnsuite Boolean @default(false)
+  hasJacuzzi Boolean @default(false)
+  note       String?
+
+  @@index([villaId, order])
+}
+
+/// `url` her zaman kullanılabilir gösterim adresi. `storedName` yalnızca
+/// formdan yüklenen dosyalarda dolu — silinirken diskten kaldırmak için.
+/// Seed/demo verisi dış URL kullanır (storedName null), gerçek disk dosyası
+/// zorlanmaz.
+model VillaImage {
+  id      String @id @default(cuid())
+  villaId String
+  villa   Villa  @relation(fields: [villaId], references: [id], onDelete: Cascade)
+
+  category   ImageCategory @default(OTHER)
+  url        String
+  storedName String?
+  fileName   String?
+  mimeType   String?
+  size       Int?
+  width      Int?
+  height     Int?
+  order      Int
+  isCover    Boolean       @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([villaId, order])
+}
+
+model VillaPriceRule {
+  id      String @id @default(cuid())
+  villaId String
+  villa   Villa  @relation(fields: [villaId], references: [id], onDelete: Cascade)
+
+  startDate     DateTime
+  endDate       DateTime
+  pricePerNight Int
+  minNights     Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([villaId, startDate])
+}
+
+model VillaBlockedDate {
+  id      String @id @default(cuid())
+  villaId String
+  villa   Villa  @relation(fields: [villaId], references: [id], onDelete: Cascade)
+
+  startDate DateTime
+  endDate   DateTime
+  note      String?
+
+  createdAt DateTime @default(now())
+
+  @@index([villaId, startDate])
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum OwnershipType {
+  SOLE
+  SHARED
+  SITE
+}
+
+enum DocumentType {
+  PERMIT_CERTIFICATE
+  PLAQUE_PHOTO
+  TITLE_DEED
+  ID_DOCUMENT
+  FIRE_SAFETY_DECLARATION
+  POWER_OF_ATTORNEY
+  CONSENT_LETTER
+  MANAGEMENT_DECISION
+  OTHER
+}
+
+/// "Villa Kayıt ve Ön Başvuru Formu" — 7464 sayılı Kanun kapsamındaki resmi
+/// alanları birebir taşır. Başvuru sahibi kayıtlı kullanıcı olmak zorunda değil;
+/// onay sonrası ev sahibi hesabına bağlama ayrı bir modülde (Ev sahipleri) yapılacak.
+model HostApplication {
+  id     String            @id @default(cuid())
+  status ApplicationStatus @default(PENDING)
+
+  // 1. Villa Sahibi / Yetkili Bilgileri
+  ownerName     String
+  ownerIdNumber String
+  phone         String
+  email         String
+  uetsAddress   String?
+  iban          String
+
+  // 2. Mülk ve İzin Bilgileri
+  address       String
+  parcelNo      String?
+  permitNumber  String?
+  maxCapacity   Int?
+  kbsCode       String?
+  ownershipType OwnershipType
+
+  // 4. Taahhüt ve onay
+  termsAcceptedAt DateTime
+  signatureName   String
+
+  // İnceleme
+  adminNote  String?
+  reviewedAt DateTime?
+  reviewedBy String?
+
+  documents HostApplicationDocument[]
+  createdAt DateTime                  @default(now())
+  updatedAt DateTime                  @updatedAt
+
+  @@index([status, createdAt])
+}
+
+/// Diskteki gerçek dosya adı (storedName) rastgele üretilir; orijinal ad
+/// yalnızca görüntüleme için saklanır — yol/isim çakışması ve path traversal riski olmasın.
+model HostApplicationDocument {
+  id            String          @id @default(cuid())
+  applicationId String
+  application   HostApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  type          DocumentType
+  fileName      String
+  storedName    String
+  mimeType      String
+  size          Int
+  uploadedAt    DateTime        @default(now())
+
+  @@index([applicationId])
+}
+
+model Favorite {
+  id      String @id @default(cuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  villaId String
+  villa   Villa  @relation(fields: [villaId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, villaId])
+  @@index([villaId])
+}

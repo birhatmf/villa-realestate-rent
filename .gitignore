@@ -1,0 +1,24 @@
+# Bağımlılıklar
+node_modules/
+
+# Ortam değişkenleri (gizli anahtarlar)
+.env
+.env.local
+.env*.local
+
+# Backend derleme çıktısı ve yüklenen dosyalar
+backend/dist/
+backend/uploads/
+
+# Frontend derleme çıktısı
+frontend/.next/
+frontend/out/
+frontend/tsconfig.tsbuildinfo
+
+# Yerel araç/asistan dizinleri (proje kaynağı değil)
+.claude/
+.commandcode/
+graphify-out/
+
+# İşletim sistemi
+.DS_Store

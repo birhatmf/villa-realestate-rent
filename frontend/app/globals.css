@@ -1,0 +1,75 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-canvas: #fbf9f5;
+  --color-surface: #ffffff;
+  --color-sand: #efe9df;
+  --color-sand-deep: #e2d9c9;
+  --color-line: #e5dfd4;
+  --color-ink: #1b1a17;
+  --color-ink-soft: #3d3a34;
+  --color-muted: #6e6a61;
+  --color-olive: #46553f;
+  --color-olive-soft: #7d8b74;
+  --color-gold: #a8834e;
+
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: var(--color-olive);
+    color: var(--color-canvas);
+  }
+}
+
+@utility eyebrow {
+  font-size: 0.6875rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+/* Blokların görünüm alanına girerken yumuşak yükselmesi. */
+@utility reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.9s var(--ease-out-soft),
+    transform 0.9s var(--ease-out-soft);
+}
+
+@utility reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Admin öngösterimi kendi scroll kabında; IntersectionObserver viewport'a
+   göre çalıştığı için bloklar gizli kalırdı — burada animasyonu kapatıyoruz. */
+.preview-root .reveal {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
