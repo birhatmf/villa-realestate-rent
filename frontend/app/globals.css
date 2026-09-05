@@ -73,3 +73,18 @@
   transform: none;
   transition: none;
 }
+
+/* PushWhatsAppUp bunu ayarlar: villa detayındaki tam genişlik mobil fiyat
+   çubuğu varken WhatsApp balonu üstüne çıkar. Masaüstünde çubuk yok, o yüzden
+   1024px üstünde normal konuma döner — media query, JS resize dinleyicisi gerekmez. */
+:root {
+  --wa-bottom-offset: 1.5rem;
+}
+html[data-lift-whatsapp='true'] {
+  --wa-bottom-offset: 6.5rem;
+}
+@media (min-width: 1024px) {
+  html[data-lift-whatsapp='true'] {
+    --wa-bottom-offset: 1.5rem;
+  }
+}

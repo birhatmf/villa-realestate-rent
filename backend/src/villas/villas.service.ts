@@ -61,6 +61,7 @@ export type VillaInput = {
   allowYoungGroups?: boolean;
   eventsAllowed?: boolean;
   smokingAllowed?: boolean;
+  customRules?: string[];
   checkInTime?: string;
   checkOutTime?: string;
   checkInWeekday?: number | null;

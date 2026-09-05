@@ -204,6 +204,8 @@ model Villa {
   allowYoungGroups      Boolean   @default(true)
   eventsAllowed         Boolean   @default(false)
   smokingAllowed        Boolean   @default(false)
+  /// Sabit kurallara ek, host'un serbest metinle eklediği kurallar ("Havuzda cam eşya yasak" vb.).
+  customRules           String[]
   checkInTime           String    @default("16:00")
   checkOutTime          String    @default("10:00")
   /// 0=Pazar..6=Cumartesi, null = kısıt yok.

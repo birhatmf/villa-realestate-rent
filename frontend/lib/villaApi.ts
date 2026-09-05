@@ -83,6 +83,7 @@ export type VillaFormInput = {
   allowYoungGroups: boolean;
   eventsAllowed: boolean;
   smokingAllowed: boolean;
+  customRules: string[];
   checkInTime: string;
   checkOutTime: string;
   checkInWeekday: number | null;
@@ -165,6 +166,7 @@ export const DEFAULT_VILLA_FORM: VillaFormInput = {
   allowYoungGroups: true,
   eventsAllowed: false,
   smokingAllowed: false,
+  customRules: [],
   checkInTime: '16:00',
   checkOutTime: '10:00',
   checkInWeekday: null,

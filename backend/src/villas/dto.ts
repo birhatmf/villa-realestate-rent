@@ -85,6 +85,7 @@ export class VillaInputDto {
   @IsOptional() @IsBoolean() allowYoungGroups?: boolean;
   @IsOptional() @IsBoolean() eventsAllowed?: boolean;
   @IsOptional() @IsBoolean() smokingAllowed?: boolean;
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) customRules?: string[];
   @IsOptional() @Matches(TIME_RE, { message: 'Saat SS:DD biçiminde olmalı.' }) checkInTime?: string;
   @IsOptional() @Matches(TIME_RE, { message: 'Saat SS:DD biçiminde olmalı.' }) checkOutTime?: string;
   @IsOptional() @IsInt() @Min(0) @Max(6) checkInWeekday?: number;

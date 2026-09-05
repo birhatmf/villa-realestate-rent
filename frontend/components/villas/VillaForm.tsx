@@ -35,6 +35,20 @@ import { Field, Row, Section, Select, TextArea, TextInput, Toggle } from './form
 
 type Region = { id: string; slug: string; name: string };
 
+type TabId = 'temel' | 'kapasite' | 'odalar' | 'konsept' | 'fiyat' | 'kurallar' | 'gorseller' | 'fiyatKurallari' | 'takvim';
+
+const TABS: { id: TabId; label: string; editOnly?: boolean }[] = [
+  { id: 'temel', label: '1. Temel Bilgiler' },
+  { id: 'kapasite', label: '2. Kapasite ve Mekan' },
+  { id: 'odalar', label: '3. Oda Kırılımı' },
+  { id: 'konsept', label: '4. Konsept ve Nitelikler' },
+  { id: 'fiyat', label: '5. Fiyatlandırma' },
+  { id: 'kurallar', label: '6. Kurallar' },
+  { id: 'gorseller', label: '7. Görseller', editOnly: true },
+  { id: 'fiyatKurallari', label: '8. Sezonluk Fiyatlar', editOnly: true },
+  { id: 'takvim', label: '9. Takvim', editOnly: true },
+];
+
 export default function VillaForm({
   scope,
   villaId,
@@ -53,6 +67,7 @@ export default function VillaForm({
   const [villa, setVilla] = useState<VillaDetail | null>(null);
   const [form, setForm] = useState<VillaFormInput>(DEFAULT_VILLA_FORM);
   const [dirty, setDirty] = useState(false);
+  const [tab, setTab] = useState<TabId>('temel');
 
   const priceRange = useMemo(() => {
     if (!form.pricePerNight) return null;
@@ -220,8 +235,24 @@ export default function VillaForm({
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-6 py-10">
+      <div className="flex min-h-0 flex-1">
+        <nav className="w-52 shrink-0 space-y-0.5 overflow-y-auto border-r border-line bg-sand/20 px-2.5 py-4">
+          {TABS.filter((t) => !t.editOnly || !isCreate).map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`block w-full rounded-lg px-3 py-2 text-left text-[0.85rem] transition-colors ${
+                tab === t.id ? 'bg-ink text-canvas' : 'text-ink-soft hover:bg-sand-deep/60 hover:text-ink'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-2xl px-8 py-10">
+          {tab === 'temel' && (
           <Section n="1" title="Temel Bilgiler">
             <Field label="Başlık" required>
               <TextInput value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="Villa Meltem" />
@@ -276,7 +307,9 @@ export default function VillaForm({
               </div>
             </div>
           </Section>
+          )}
 
+          {tab === 'kapasite' && (
           <Section n="2" title="Kapasite ve Mekan">
             <Row cols={3}>
               <Field label="Yetişkin" required>
@@ -298,11 +331,15 @@ export default function VillaForm({
               </Field>
             </Row>
           </Section>
+          )}
 
+          {tab === 'odalar' && (
           <Section n="3" title="Oda Kırılımı" hint="Her yatak odası için tip, banyo ve jakuzi bilgisi.">
             <RoomsEditor rooms={form.rooms} onChange={(rooms) => set('rooms', rooms)} />
           </Section>
+          )}
 
+          {tab === 'konsept' && (
           <Section n="4" title="Konsept ve Nitelikler">
             <Field label="Havuz tipi">
               <Select value={form.poolType} onChange={(v) => set('poolType', v)} options={POOL_TYPES} />
@@ -387,7 +424,9 @@ export default function VillaForm({
               <TextInput value={form.videoUrl ?? ''} onChange={(e) => set('videoUrl', e.target.value)} placeholder="https://youtube.com/…" />
             </Field>
           </Section>
+          )}
 
+          {tab === 'fiyat' && (
           <Section n="5" title="Fiyatlandırma ve Masraflar">
             <Row cols={3}>
               <Field label="Gecelik fiyat (baz)" required>
@@ -460,7 +499,9 @@ export default function VillaForm({
               </Field>
             )}
           </Section>
+          )}
 
+          {tab === 'kurallar' && (
           <Section n="6" title="Kurallar">
             <Field label="Evcil hayvan politikası">
               <Select value={form.petPolicy} onChange={(v) => set('petPolicy', v)} options={PET_POLICIES} />
@@ -500,14 +541,21 @@ export default function VillaForm({
                 />
               </Field>
             </Row>
-          </Section>
 
-          {isCreate ? (
-            <p className="mt-14 rounded-xl border border-dashed border-line bg-sand/30 px-5 py-6 text-center text-[0.88rem] text-muted">
-              Görsel yükleme, sezonluk fiyat kuralları ve takvim bloklama, villa oluşturulduktan sonra açılır.
-            </p>
-          ) : (
-            <>
+            <div>
+              <span className="eyebrow text-muted">Ek kurallar</span>
+              <span className="mt-1 block text-[0.76rem] text-muted/80">
+                Yukarıdakilerin dışında, bu villaya özel bir kural varsa yazıp Enter'a basın.
+              </span>
+              <TagInput values={form.customRules} onChange={(v) => set('customRules', v)} suggestions={[]} />
+            </div>
+          </Section>
+          )}
+
+          {tab === 'gorseller' && (
+            isCreate ? (
+              <EditOnlyNotice />
+            ) : (
               <Section
                 n="7"
                 title="Görseller"
@@ -515,19 +563,40 @@ export default function VillaForm({
               >
                 <ImagesManager api={api} villaId={villaId!} images={villa?.images ?? []} onChange={load} />
               </Section>
+            )
+          )}
 
+          {tab === 'fiyatKurallari' && (
+            isCreate ? (
+              <EditOnlyNotice />
+            ) : (
               <Section n="8" title="Sezonluk Fiyat Kuralları">
                 <PriceRulesManager api={api} villaId={villaId!} rules={villa?.priceRules ?? []} onChange={load} />
               </Section>
+            )
+          )}
 
+          {tab === 'takvim' && (
+            isCreate ? (
+              <EditOnlyNotice />
+            ) : (
               <Section n="9" title="Takvim — Manuel Bloklama" hint="Ev sahibinin kendi kullanımı veya bakım için tarih kapatma.">
                 <CalendarManager api={api} villaId={villaId!} blocks={villa?.blockedDates ?? []} onChange={load} />
               </Section>
-            </>
+            )
           )}
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function EditOnlyNotice() {
+  return (
+    <p className="rounded-xl border border-dashed border-line bg-sand/30 px-5 py-6 text-center text-[0.88rem] text-muted">
+      Görsel yükleme, sezonluk fiyat kuralları ve takvim bloklama, villa oluşturulduktan sonra açılır.
+    </p>
   );
 }
 

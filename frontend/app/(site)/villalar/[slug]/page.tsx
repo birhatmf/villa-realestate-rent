@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { formatPrice, getVillaBySlug } from '@/lib/api';
-import FavoriteButton from '@/components/site/FavoriteButton';
 import MinistryBadge from '@/components/site/MinistryBadge';
+import PhotoGallery from '@/components/site/PhotoGallery';
+import PushWhatsAppUp from '@/components/site/PushWhatsAppUp';
 import AvailabilityCalendar from '@/components/site/AvailabilityCalendar';
 import {
   BED_TYPE_LABEL,
@@ -34,8 +34,11 @@ export default async function VillaDetailPage({ params }: { params: Promise<{ sl
   const villa = await getVillaBySlug(slug);
   if (!villa) notFound();
 
-  const cover = villa.images.find((i) => i.isCover) ?? villa.images[0];
-  const rest = villa.images.filter((i) => i.id !== cover?.id).slice(0, 4);
+  const orderedImages = (() => {
+    const cover = villa.images.find((i) => i.isCover) ?? villa.images[0];
+    if (!cover) return villa.images;
+    return [cover, ...villa.images.filter((i) => i.id !== cover.id)];
+  })();
 
   const included: string[] = [];
   const excluded: string[] = [];
@@ -53,7 +56,8 @@ export default async function VillaDetailPage({ params }: { params: Promise<{ sl
   }
 
   return (
-    <div className="pb-28 pt-32">
+    <div className="pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-32 lg:pb-28">
+      <PushWhatsAppUp />
       <div className="mx-auto max-w-5xl px-6 lg:px-10">
         <p className="eyebrow text-gold">
           {villa.region.name}
@@ -78,20 +82,7 @@ export default async function VillaDetailPage({ params }: { params: Promise<{ sl
         {villa.summary && <p className="mt-4 max-w-2xl text-[0.98rem] leading-relaxed text-muted">{villa.summary}</p>}
       </div>
 
-      {/* Galeri */}
-      <div className="relative mx-auto mt-8 grid max-w-5xl grid-cols-2 gap-2 px-6 sm:grid-cols-4 sm:grid-rows-2 lg:px-10">
-        {cover && (
-          <div className="relative col-span-2 row-span-2 aspect-square overflow-hidden rounded-xl bg-sand-deep sm:aspect-auto">
-            <Image src={cover.url} alt={villa.title} fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" priority />
-          </div>
-        )}
-        {rest.map((img) => (
-          <div key={img.id} className="relative aspect-square overflow-hidden rounded-xl bg-sand-deep">
-            <Image src={img.url} alt="" fill sizes="25vw" className="object-cover" />
-          </div>
-        ))}
-        <FavoriteButton villaId={villa.id} className="absolute right-4 top-4" />
-      </div>
+      <PhotoGallery villaId={villa.id} title={villa.title} images={orderedImages} />
 
       <div className="mx-auto mt-16 max-w-5xl px-6 lg:px-10">
         <div className="grid gap-16 lg:grid-cols-[1fr_360px]">
@@ -164,6 +155,13 @@ export default async function VillaDetailPage({ params }: { params: Promise<{ sl
                 {!villa.allowSingleMaleGroups && <Rule label="" value="Bekar erkek gruplarına kiralanmaz" />}
                 {!villa.allowYoungGroups && <Rule label="" value="Genç arkadaş gruplarına uygun değil" />}
               </dl>
+              {villa.customRules.length > 0 && (
+                <ul className="mt-5 space-y-2 border-t border-line pt-5 text-[0.9rem] text-ink-soft">
+                  {villa.customRules.map((r) => (
+                    <li key={r}>· {r}</li>
+                  ))}
+                </ul>
+              )}
             </Section>
 
             <Section title="Müsaitlik Takvimi">
@@ -222,6 +220,24 @@ export default async function VillaDetailPage({ params }: { params: Promise<{ sl
         <div className="mt-16">
           <MinistryBadge permitNumber={villa.permitNumber ?? null} />
         </div>
+      </div>
+
+      {/* Mobilde fiyat kartı içerik sonunda kalıyordu — bu, tüm gezinme boyunca görünür kalır. */}
+      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-4 border-t border-line bg-surface/95 px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 backdrop-blur-sm lg:hidden">
+        <div className="min-w-0">
+          <p className="truncate font-display text-lg text-ink">
+            {villa.priceRange.min === villa.priceRange.max
+              ? formatPrice(villa.priceRange.min, villa.currency)
+              : `${formatPrice(villa.priceRange.min, villa.currency)}+`}
+          </p>
+          <p className="text-[0.76rem] text-muted">/ gece</p>
+        </div>
+        <a
+          href="/iletisim"
+          className="shrink-0 rounded-full bg-ink px-6 py-3 text-[0.88rem] text-canvas transition-colors hover:bg-olive"
+        >
+          Bilgi ve rezervasyon
+        </a>
       </div>
     </div>
   );
