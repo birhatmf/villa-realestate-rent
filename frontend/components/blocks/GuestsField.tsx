@@ -2,10 +2,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-export default function GuestsField({ className = '' }: { className?: string }) {
+export default function GuestsField({ className = '', defaultAdults = 2, defaultChildren = 0, defaultInfants = 0 }: {
+  className?: string;
+  defaultAdults?: number;
+  defaultChildren?: number;
+  defaultInfants?: number;
+}) {
   const [open, setOpen] = useState(false);
-  const [adults, setAdults] = useState(2);
-  const [children, setChildren] = useState(0);
+  const [adults, setAdults] = useState(defaultAdults);
+  const [children, setChildren] = useState(defaultChildren);
+  const [infants, setInfants] = useState(defaultInfants);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,12 +30,17 @@ export default function GuestsField({ className = '' }: { className?: string }) 
     };
   }, [open]);
 
-  const summary = children > 0 ? `${adults} yetişkin, ${children} çocuk` : `${adults} yetişkin`;
+  const summary = [
+    `${adults} yetişkin`,
+    children > 0 ? `${children} çocuk` : '',
+    infants > 0 ? `${infants} bebek` : '',
+  ].filter(Boolean).join(', ');
 
   return (
     <div ref={ref} className={`relative ${className}`}>
       <button
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className="flex w-full flex-col gap-1.5 bg-surface px-6 py-4 text-left transition-colors hover:bg-sand/40"
       >
@@ -39,12 +50,15 @@ export default function GuestsField({ className = '' }: { className?: string }) 
 
       <input type="hidden" name="adults" value={adults} />
       <input type="hidden" name="children" value={children} />
+      <input type="hidden" name="infants" value={infants} />
 
       {open && (
         <div className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-[min(90vw,18rem)] rounded-2xl border border-line bg-canvas p-5 text-ink shadow-[0_24px_60px_-16px_rgba(0,0,0,0.35)]">
           <Counter label="Yetişkin" hint="13 yaş ve üzeri" value={adults} min={1} max={20} onChange={setAdults} />
           <div className="my-4 h-px bg-line" />
           <Counter label="Çocuk" hint="0–12 yaş" value={children} min={0} max={12} onChange={setChildren} />
+          <div className="my-4 h-px bg-line" />
+          <Counter label="Bebek" hint="0–2 yaş" value={infants} min={0} max={10} onChange={setInfants} />
         </div>
       )}
     </div>

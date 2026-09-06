@@ -4,9 +4,8 @@ import { existsSync } from 'fs';
 import { mkdir, unlink, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { PrismaService } from '../prisma.service';
-import { VillasService } from './villas.service';
+import { UPLOAD_ROOT, VillasService } from './villas.service';
 
-export const UPLOAD_ROOT = join(process.cwd(), 'uploads', 'villas');
 const PUBLIC_URL = process.env.PUBLIC_URL ?? 'http://localhost:4000';
 
 const ALLOWED_MIME: Record<string, string> = {

@@ -49,6 +49,14 @@ const TABS: { id: TabId; label: string; editOnly?: boolean }[] = [
   { id: 'takvim', label: '9. Takvim', editOnly: true },
 ];
 
+const BLOCK_KIND_OPTIONS = [
+  { value: 'MANUAL', label: 'Satışa kapalı' },
+  { value: 'MAINTENANCE', label: 'Bakım' },
+  { value: 'OWNER_USE', label: 'Ev sahibi kullanımı' },
+] as const;
+
+const BLOCK_KIND_LABEL = Object.fromEntries(BLOCK_KIND_OPTIONS.map((option) => [option.value, option.label]));
+
 export default function VillaForm({
   scope,
   villaId,
@@ -922,14 +930,19 @@ function CalendarManager({
   blocks: VillaBlockedDate[];
   onChange: () => void;
 }) {
-  const [form, setForm] = useState({ startDate: '', endDate: '', note: '' });
+  const [form, setForm] = useState<{
+    startDate: string;
+    endDate: string;
+    kind: VillaBlockedDate['kind'];
+    note: string;
+  }>({ startDate: '', endDate: '', kind: 'MANUAL', note: '' });
   const [error, setError] = useState<string | null>(null);
 
   async function add() {
     setError(null);
     try {
       await api.addBlockedDate(villaId, form);
-      setForm({ startDate: '', endDate: '', note: '' });
+      setForm({ startDate: '', endDate: '', kind: 'MANUAL', note: '' });
       onChange();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Eklenemedi.');
@@ -945,6 +958,9 @@ function CalendarManager({
               {fmtDate(b.startDate)} – {fmtDate(b.endDate)}
             </span>
             <span className="text-[0.85rem] text-muted">{b.note}</span>
+            <span className="rounded-full bg-sand px-2.5 py-1 text-[0.74rem] text-muted">
+              {BLOCK_KIND_LABEL[b.kind]}
+            </span>
             <button
               onClick={async () => {
                 await api.removeBlockedDate(villaId, b.id);
@@ -959,9 +975,10 @@ function CalendarManager({
         {!blocks.length && <p className="py-3 text-[0.85rem] text-muted">Bloke edilmiş tarih yok.</p>}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <TextInput type="date" value={form.startDate} onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} />
         <TextInput type="date" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} />
+        <Select value={form.kind} onChange={(kind) => setForm((f) => ({ ...f, kind: kind as VillaBlockedDate['kind'] }))} options={BLOCK_KIND_OPTIONS} />
         <TextInput placeholder="Not (ops.)" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
       </div>
       {error && <p className="mt-2 text-[0.82rem] text-red-700">{error}</p>}
@@ -976,4 +993,9 @@ function CalendarManager({
   );
 }
 
-const fmtDate = (d: string) => new Date(d).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
+const fmtDate = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00Z`).toLocaleDateString('tr-TR', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+});

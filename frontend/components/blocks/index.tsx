@@ -7,6 +7,7 @@ import Hero from './Hero';
 import RegionGrid from './RegionGrid';
 import StatBar from './StatBar';
 import Testimonials from './Testimonials';
+import TextContent from './TextContent';
 import ValueProps from './ValueProps';
 
 type BlockComponent = React.ComponentType<{ content: Record<string, any> }>;
@@ -22,6 +23,7 @@ export const BLOCKS: Record<string, BlockComponent> = {
   valueProps: ValueProps,
   testimonials: Testimonials,
   ctaBanner: CtaBanner,
+  textContent: TextContent,
 };
 
 export function renderSections(sections: Section[]) {

@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
-    "start": "node dist/main",
+    "start": "node dist/src/main",
+    "test:availability": "ts-node test/availability-unit.ts",
     "db:push": "prisma db push",
     "db:seed": "ts-node prisma/seed.ts",
     "db:studio": "prisma studio"

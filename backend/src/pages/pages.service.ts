@@ -1,11 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import { VillasService } from '../villas/villas.service';
 
 type Content = Record<string, any>;
 
 @Injectable()
 export class PagesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private villas: VillasService) {}
 
   async findBySlug(slug: string) {
     const page = await this.prisma.page.findUnique({
@@ -34,17 +35,24 @@ export class PagesService {
   async hydrate(type: string, content: Content): Promise<Content> {
     if (type === 'featuredVillas') {
       const rows = await this.prisma.villa.findMany({
-        where: { status: 'PUBLISHED', ...(content.onlyFeatured === false ? {} : { featured: true }) },
+        where: {
+          status: 'PUBLISHED',
+          salesStatus: 'OPEN',
+          featured: true,
+          OR: [{ featuredUntil: null }, { featuredUntil: { gte: new Date() } }],
+        },
         include: {
           region: { select: { name: true, slug: true } },
           images: { orderBy: { order: 'asc' }, take: 2 },
+          priceRules: { select: { pricePerNight: true } },
         },
-        orderBy: { createdAt: 'desc' },
-        take: content.limit ?? 6,
+        orderBy: [
+          { featuredOrder: { sort: 'asc', nulls: 'last' } },
+          { createdAt: 'desc' },
+        ],
+        take: content.limit ?? 8,
       });
-      // FeaturedVillas.tsx `images: string[]` bekliyor — VillaImage ilişkisini
-      // eski sözleşmeyi bozmadan burada düz URL dizisine indiriyoruz.
-      const villas = rows.map(({ images, ...v }) => ({ ...v, images: images.map((i) => i.url) }));
+      const villas = rows.map((villa) => this.villas.toCardData(villa));
       return { ...content, villas };
     }
 
@@ -52,7 +60,7 @@ export class PagesService {
       const regions = await this.prisma.region.findMany({
         orderBy: { order: 'asc' },
         take: content.limit ?? 8,
-        include: { _count: { select: { villas: true } } },
+        include: { _count: { select: { villas: { where: { status: 'PUBLISHED' } } } } },
       });
       return {
         ...content,
@@ -64,7 +72,7 @@ export class PagesService {
       const concepts = await this.prisma.concept.findMany({
         orderBy: { order: 'asc' },
         take: content.limit ?? 4,
-        include: { _count: { select: { villas: true } } },
+        include: { _count: { select: { villas: { where: { status: 'PUBLISHED' } } } } },
       });
       return {
         ...content,

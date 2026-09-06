@@ -113,7 +113,14 @@ export const BLOCK_SCHEMAS: Record<string, BlockSchema> = {
       { key: 'eyebrow', label: 'Üst başlık', type: 'text' },
       { key: 'title', label: 'Başlık', type: 'text' },
       { key: 'description', label: 'Açıklama', type: 'textarea' },
-      { key: 'limit', label: 'Kaç villa gösterilsin', type: 'number', min: 3, max: 12 },
+      {
+        key: 'limit',
+        label: 'Kaç villa gösterilsin',
+        type: 'number',
+        min: 3,
+        max: 12,
+        hint: 'Villaları ve sıralarını Öne çıkanlar ekranından yönetin.',
+      },
       { key: 'ctaLabel', label: 'Bağlantı yazısı', type: 'text' },
       { key: 'ctaHref', label: 'Bağlantı', type: 'text', placeholder: '/villalar' },
     ],
@@ -121,7 +128,7 @@ export const BLOCK_SCHEMAS: Record<string, BlockSchema> = {
       eyebrow: 'Seçkiler',
       title: 'Öne çıkanlar',
       description: '',
-      limit: 6,
+      limit: 8,
       ctaLabel: 'Tüm villaları gör',
       ctaHref: '/villalar',
     },
@@ -217,6 +224,36 @@ export const BLOCK_SCHEMAS: Record<string, BlockSchema> = {
       primary: { label: 'Buton', href: '/' },
       secondary: { label: '', href: '' },
     },
+  },
+
+  textContent: {
+    label: 'Metin içeriği',
+    description: 'Kurumsal, SSS ve yasal sayfalar için okunaklı metin alanı',
+    fields: [
+      {
+        key: 'intro',
+        label: 'Giriş metni',
+        type: 'textarea',
+        hint: 'Sayfa başlığının altında öne çıkan kısa açıklama.',
+      },
+      {
+        key: 'items',
+        label: 'Bölümler',
+        type: 'list',
+        itemLabel: 'Bölüm',
+        fields: [
+          { key: 'title', label: 'Bölüm başlığı', type: 'text' },
+          {
+            key: 'body',
+            label: 'Metin',
+            type: 'textarea',
+            hint: 'Paragrafları ayırmak için boş satır kullanın.',
+          },
+        ],
+        defaultItem: { title: '', body: '' },
+      },
+    ],
+    defaults: { intro: '', items: [{ title: '', body: '' }] },
   },
 };
 

@@ -17,6 +17,8 @@ export type AdminPage = {
   id: string;
   slug: string;
   title: string;
+  seoTitle: string | null;
+  seoDescription: string | null;
   sections: AdminSection[];
 };
 
@@ -25,7 +27,22 @@ export const listPages = () =>
     '/admin/pages',
   );
 
-export const getAdminPage = (slug: string) => req<AdminPage>(`/admin/pages/${slug}`);
+export const getAdminPage = (slug: string) => req<AdminPage>(`/admin/pages/${encodeURIComponent(slug)}`);
+
+export const createPage = (data: { title: string; slug: string }) =>
+  req<Pick<AdminPage, 'id' | 'slug' | 'title'>>('/admin/pages', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const updatePage = (
+  id: string,
+  data: Pick<AdminPage, 'title' | 'seoTitle' | 'seoDescription'>,
+) =>
+  req<Pick<AdminPage, 'id' | 'slug' | 'title' | 'seoTitle' | 'seoDescription'>>(
+    `/admin/pages/${id}`,
+    { method: 'PATCH', body: JSON.stringify(data) },
+  );
 
 export const previewBlock = (type: string, content: Record<string, any>) =>
   req<Record<string, any>>('/admin/preview', {
@@ -207,3 +224,24 @@ export const regionsApi = createTaxonomyApi('regions');
 export const conceptsApi = createTaxonomyApi('concepts');
 
 export const listConcepts = () => req<{ id: string; slug: string; name: string }[]>('/concepts');
+
+// ---- Öne çıkan villalar ----------------------------------------------------
+
+export type FeaturedVilla = {
+  id: string;
+  slug: string;
+  title: string;
+  status: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED';
+  featuredOrder: number | null;
+  featuredUntil: string | null;
+  region: { name: string; slug: string };
+  images: { url: string }[];
+};
+
+export const listFeatured = () => req<FeaturedVilla[]>('/admin/featured');
+
+export const saveFeatured = (items: { villaId: string; featuredUntil: string | null }[]) =>
+  req<FeaturedVilla[]>('/admin/featured', {
+    method: 'PUT',
+    body: JSON.stringify({ items }),
+  });

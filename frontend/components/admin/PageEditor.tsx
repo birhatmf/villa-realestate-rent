@@ -10,6 +10,7 @@ import {
   removeSection,
   reorderSections,
   updateSection,
+  updatePage,
   type AdminPage,
   type AdminSection,
 } from '@/lib/adminApi';
@@ -32,15 +33,23 @@ export default function PageEditor({ slug }: { slug: string }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [detailsDirty, setDetailsDirty] = useState(false);
+  const [details, setDetails] = useState({ title: '', seoTitle: '', seoDescription: '' });
 
   const selected = sections.find((s) => s.id === selectedId) ?? null;
-  const hasChanges = dirty.size > 0 || orderDirty;
+  const hasChanges = dirty.size > 0 || orderDirty || detailsDirty;
 
   // ---- yükleme -------------------------------------------------------------
   useEffect(() => {
     getAdminPage(slug)
       .then((p) => {
         setPage(p);
+        setDetails({
+          title: p.title,
+          seoTitle: p.seoTitle ?? '',
+          seoDescription: p.seoDescription ?? '',
+        });
         setSections(p.sections.map(({ id, type, visible, content }) => ({ id, type, visible, content })));
         setDynamic(
           Object.fromEntries(p.sections.map((s) => [s.id, extractDynamic(s.content, s.preview)])),
@@ -135,14 +144,23 @@ export default function PageEditor({ slug }: { slug: string }) {
         if (s) await updateSection(id, { content: s.content, visible: s.visible });
       }
       if (orderDirty) await reorderSections(page.id, sections.map((s) => s.id));
+      if (detailsDirty) {
+        const saved = await updatePage(page.id, {
+          title: details.title,
+          seoTitle: details.seoTitle,
+          seoDescription: details.seoDescription,
+        });
+        setPage((current) => (current ? { ...current, ...saved } : current));
+      }
       setDirty(new Set());
       setOrderDirty(false);
+      setDetailsDirty(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Kaydedilemedi.');
     } finally {
       setSaving(false);
     }
-  }, [page, hasChanges, saving, dirty, sections, orderDirty]);
+  }, [page, hasChanges, saving, dirty, sections, orderDirty, detailsDirty, details]);
 
   const saveRef = useRef(save);
   saveRef.current = save;
@@ -177,7 +195,7 @@ export default function PageEditor({ slug }: { slug: string }) {
             ← Sayfalar
           </Link>
           <span className="h-4 w-px bg-line" />
-          <h1 className="font-display text-lg font-light text-ink">{page.title}</h1>
+          <h1 className="font-display text-lg font-light text-ink">{details.title}</h1>
           {hasChanges && (
             <span className="rounded-full bg-gold/15 px-2.5 py-1 text-[0.72rem] text-gold">
               kaydedilmemiş değişiklik
@@ -187,6 +205,13 @@ export default function PageEditor({ slug }: { slug: string }) {
 
         <div className="flex items-center gap-3">
           {error && <span className="text-[0.8rem] text-red-700">{error}</span>}
+          <button
+            type="button"
+            onClick={() => setEditingDetails((value) => !value)}
+            className={`text-[0.85rem] transition-colors ${editingDetails ? 'text-gold' : 'text-muted hover:text-ink'}`}
+          >
+            Sayfa bilgileri
+          </button>
           <Link
             href={page.slug === 'home' ? '/' : `/${page.slug}`}
             target="_blank"
@@ -207,7 +232,17 @@ export default function PageEditor({ slug }: { slug: string }) {
       <div className="flex min-h-0 flex-1">
         {/* sol panel */}
         <aside className="flex w-[380px] shrink-0 flex-col border-r border-line bg-canvas">
-          {selected ? (
+          {editingDetails ? (
+            <PageDetails
+              slug={page.slug}
+              value={details}
+              onBack={() => setEditingDetails(false)}
+              onChange={(next) => {
+                setDetails(next);
+                setDetailsDirty(true);
+              }}
+            />
+          ) : selected ? (
             <BlockForm
               section={selected}
               onBack={() => setSelectedId(null)}
@@ -274,6 +309,74 @@ export default function PageEditor({ slug }: { slug: string }) {
 }
 
 // ---------------------------------------------------------------------------
+
+function PageDetails({
+  slug,
+  value,
+  onBack,
+  onChange,
+}: {
+  slug: string;
+  value: { title: string; seoTitle: string; seoDescription: string };
+  onBack: () => void;
+  onChange: (next: { title: string; seoTitle: string; seoDescription: string }) => void;
+}) {
+  const inputClass =
+    'mt-1.5 w-full rounded-md border border-line bg-surface px-3 py-2 text-[0.9rem] text-ink outline-none transition-colors focus:border-olive-soft';
+
+  return (
+    <>
+      <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3.5">
+        <button onClick={onBack} className="text-[0.85rem] text-muted hover:text-ink" aria-label="Bloklara dön">
+          ←
+        </button>
+        <div>
+          <p className="text-[0.92rem] text-ink">Sayfa bilgileri</p>
+          <p className="text-[0.75rem] text-muted">Başlık ve arama motoru görünümü</p>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-5">
+        <label className="block">
+          <span className="eyebrow text-muted">Sayfa başlığı</span>
+          <input
+            required
+            minLength={2}
+            maxLength={100}
+            value={value.title}
+            onChange={(e) => onChange({ ...value, title: e.target.value })}
+            className={inputClass}
+          />
+        </label>
+        <label className="block">
+          <span className="eyebrow text-muted">Sayfa adresi</span>
+          <input value={`/${slug}`} readOnly className={`${inputClass} cursor-not-allowed bg-sand/50 text-muted`} />
+          <span className="mt-1 block text-[0.75rem] text-muted">Bağlantılar bozulmasın diye adres sabit tutulur.</span>
+        </label>
+        <label className="block">
+          <span className="eyebrow text-muted">SEO başlığı</span>
+          <input
+            maxLength={160}
+            value={value.seoTitle}
+            placeholder={value.title}
+            onChange={(e) => onChange({ ...value, seoTitle: e.target.value })}
+            className={inputClass}
+          />
+        </label>
+        <label className="block">
+          <span className="eyebrow text-muted">SEO açıklaması</span>
+          <textarea
+            rows={5}
+            maxLength={320}
+            value={value.seoDescription}
+            onChange={(e) => onChange({ ...value, seoDescription: e.target.value })}
+            className={`${inputClass} resize-y leading-relaxed`}
+          />
+          <span className="mt-1 block text-right text-[0.72rem] text-muted">{value.seoDescription.length}/320</span>
+        </label>
+      </div>
+    </>
+  );
+}
 
 function BlockList({
   sections,

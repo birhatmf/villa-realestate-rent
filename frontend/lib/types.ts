@@ -1,19 +1,30 @@
-export type Villa = {
+/**
+ * Paylaşılan villa kartı sözleşmesi. Hem ana sayfa `featuredVillas` bloğu
+ * (pages.service.ts hydrate) hem `/villalar` listelemesi (villas.service.ts
+ * toCardData) bu şekli üretir — tek kart bileşeni ikisini de render eder.
+ */
+export type VillaCardData = {
   id: string;
   slug: string;
   title: string;
   summary: string | null;
   district: string | null;
-  pricePerNight: number;
   currency: string;
   capacity: number;
   bedrooms: number;
   bathrooms: number;
   images: string[];
-  amenities: string[];
   rating: number;
   reviewCount: number;
+  priceRange: { min: number; max: number };
   region: { name: string; slug: string };
+};
+
+export type VillaListResponse = {
+  items: VillaCardData[];
+  total: number;
+  page: number;
+  pageSize: number;
 };
 
 export type Region = {

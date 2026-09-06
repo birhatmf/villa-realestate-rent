@@ -37,7 +37,10 @@ export type VillaBlockedDate = {
   id: string;
   startDate: string;
   endDate: string;
+  kind: 'MANUAL' | 'MAINTENANCE' | 'OWNER_USE';
+  state: 'ACTIVE' | 'RELEASED';
   note: string | null;
+  releasedAt: string | null;
 };
 
 /** Form gönderirken kullanılan şekil — scalar alanların tamamı, oda listesi dahil. */
@@ -101,6 +104,8 @@ export type VillaDetail = Omit<VillaFormInput, 'conceptIds'> & {
   reviewCount: number;
   slug: string;
   status: VillaStatus;
+  salesStatus: 'OPEN' | 'PAUSED';
+  timezone: string;
   hostId: string | null;
   capacity: number;
   reviewNote: string | null;
@@ -236,7 +241,7 @@ export function createVillaApi(scope: 'admin' | 'host') {
     removePriceRule: (villaId: string, ruleId: string) =>
       req<{ ok: true }>(`${base}/${villaId}/price-rules/${ruleId}`, { method: 'DELETE' }),
 
-    addBlockedDate: (villaId: string, data: { startDate: string; endDate: string; note?: string }) =>
+    addBlockedDate: (villaId: string, data: { startDate: string; endDate: string; kind?: VillaBlockedDate['kind']; note?: string }) =>
       req<VillaBlockedDate>(`${base}/${villaId}/blocked-dates`, { method: 'POST', body: JSON.stringify(data) }),
 
     removeBlockedDate: (villaId: string, blockId: string) =>

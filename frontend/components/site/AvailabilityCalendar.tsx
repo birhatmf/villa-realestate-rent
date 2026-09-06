@@ -3,16 +3,13 @@ type Range = { startDate: string; endDate: string };
 const WEEKDAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 /** Yarı açık aralık [startDate, endDate) — çıkış günü (endDate) müsait sayılır,
  * bir sonraki misafir aynı gün giriş yapabilir. */
 function isBlocked(day: Date, ranges: Range[]) {
-  const t = day.getTime();
-  return ranges.some((r) => {
-    const start = startOfDay(new Date(r.startDate)).getTime();
-    const end = startOfDay(new Date(r.endDate)).getTime();
-    return t >= start && t < end;
-  });
+  const date = isoDate(day);
+  return ranges.some((range) => date >= range.startDate.slice(0, 10) && date < range.endDate.slice(0, 10));
 }
 
 function Month({ year, month, ranges }: { year: number; month: number; ranges: Range[] }) {

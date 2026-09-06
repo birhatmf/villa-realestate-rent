@@ -9,6 +9,7 @@ import { UsersController } from './admin/users.controller';
 import { UsersService } from './admin/users.service';
 import { FavoritesController } from './favorites/favorites.controller';
 import { FavoritesService } from './favorites/favorites.service';
+import { FeaturedController } from './villas/featured.controller';
 import { AdminHostApplicationsController } from './host-applications/admin-host-applications.controller';
 import { HostApplicationsController } from './host-applications/host-applications.controller';
 import { HostApplicationsService } from './host-applications/host-applications.service';
@@ -47,6 +48,7 @@ import { VillasService } from './villas/villas.service';
     HostApplicationsController,
     AdminHostApplicationsController,
     AdminVillasController,
+    FeaturedController,
     HostVillasController,
     PublicVillasController,
     FavoritesController,

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { PagesService } from '../pages/pages.service';
@@ -20,6 +20,40 @@ export class AdminService {
         updatedAt: true,
         _count: { select: { sections: true } },
       },
+    });
+  }
+
+  async createPage(data: { title: string; slug: string }) {
+    const reserved = new Set([
+      'admin',
+      'bolgeler',
+      'ev-sahibi',
+      'giris',
+      'hesabim',
+      'home',
+      'kayit',
+      'konseptler',
+      'villalar',
+    ]);
+    if (reserved.has(data.slug)) {
+      throw new BadRequestException('Bu sayfa adresi sistem tarafından kullanılıyor.');
+    }
+    const exists = await this.prisma.page.findUnique({ where: { slug: data.slug } });
+    if (exists) throw new ConflictException('Bu sayfa adresi zaten kullanılıyor.');
+
+    return this.prisma.page.create({
+      data: {
+        title: data.title.trim(),
+        slug: data.slug,
+        sections: {
+          create: {
+            type: 'textContent',
+            order: 0,
+            content: { intro: '', items: [] },
+          },
+        },
+      },
+      select: { id: true, slug: true, title: true },
     });
   }
 
@@ -46,7 +80,40 @@ export class AdminService {
       })),
     );
 
-    return { id: page.id, slug: page.slug, title: page.title, sections };
+    return {
+      id: page.id,
+      slug: page.slug,
+      title: page.title,
+      seoTitle: page.seoTitle,
+      seoDescription: page.seoDescription,
+      sections,
+    };
+  }
+
+  async updatePage(
+    id: string,
+    data: { title?: string; seoTitle?: string; seoDescription?: string },
+  ) {
+    const page = await this.prisma.page.findUnique({ where: { id }, select: { id: true } });
+    if (!page) throw new NotFoundException('Sayfa bulunamadı.');
+
+    return this.prisma.page.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined ? { title: data.title.trim() } : {}),
+        ...(data.seoTitle !== undefined ? { seoTitle: data.seoTitle.trim() || null } : {}),
+        ...(data.seoDescription !== undefined
+          ? { seoDescription: data.seoDescription.trim() || null }
+          : {}),
+      },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        seoTitle: true,
+        seoDescription: true,
+      },
+    });
   }
 
   /** Canlı öngösterim: kaydetmeden, girilen içerikle hydrate sonucunu döner. */

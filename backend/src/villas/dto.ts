@@ -23,6 +23,8 @@ const BED_TYPES = ['DOUBLE', 'TWIN', 'SINGLE', 'BUNK', 'SOFA_BED'] as const;
 export const IMAGE_CATEGORIES = ['LIVING_KITCHEN', 'POOL_GARDEN', 'BEDROOM', 'EXTERIOR_VIEW', 'OTHER'] as const;
 const CURRENCIES = ['TRY', 'EUR', 'GBP', 'USD'] as const;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+export const BLOCKED_DATE_KINDS = ['MANUAL', 'MAINTENANCE', 'OWNER_USE'] as const;
 
 export class RoomDto {
   @IsIn(BED_TYPES) bedType!: string;
@@ -123,15 +125,16 @@ export function assertCreateRequired(dto: VillaInputDto) {
 }
 
 export class PriceRuleDto {
-  @IsString() startDate!: string;
-  @IsString() endDate!: string;
+  @IsString() @Matches(DATE_RE, { message: 'Başlangıç tarihi YYYY-AA-GG biçiminde olmalı.' }) startDate!: string;
+  @IsString() @Matches(DATE_RE, { message: 'Bitiş tarihi YYYY-AA-GG biçiminde olmalı.' }) endDate!: string;
   @IsInt() @Min(0) pricePerNight!: number;
   @IsOptional() @IsInt() @Min(1) @Max(90) minNights?: number;
 }
 
 export class BlockedDateDto {
-  @IsString() startDate!: string;
-  @IsString() endDate!: string;
+  @IsString() @Matches(DATE_RE, { message: 'Başlangıç tarihi YYYY-AA-GG biçiminde olmalı.' }) startDate!: string;
+  @IsString() @Matches(DATE_RE, { message: 'Bitiş tarihi YYYY-AA-GG biçiminde olmalı.' }) endDate!: string;
+  @IsOptional() @IsIn(BLOCKED_DATE_KINDS) kind?: (typeof BLOCKED_DATE_KINDS)[number];
   @IsOptional() @IsString() @Length(0, 300) note?: string;
 }
 

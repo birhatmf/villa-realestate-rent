@@ -95,7 +95,7 @@ const HOME_SECTIONS: { type: string; content: Prisma.InputJsonValue }[] = [
       eyebrow: 'Seçkiler',
       title: 'Bu sezonun öne çıkanları',
       description: 'Editörlerimizin bu yaz için ayırdığı evler.',
-      limit: 6,
+      limit: 8,
       ctaLabel: 'Tüm villaları gör',
       ctaHref: '/villalar',
     },
@@ -317,6 +317,7 @@ async function main() {
         rating: v.rating,
         reviewCount: v.reviews,
         featured: true,
+        featuredOrder: i,
         images: {
           create: v.images.map((id, k) => ({
             url: img(id, 1200),

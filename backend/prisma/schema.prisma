@@ -143,6 +143,22 @@ enum ImageCategory {
   OTHER
 }
 
+enum VillaSalesStatus {
+  OPEN
+  PAUSED
+}
+
+enum VillaBlockedDateKind {
+  MANUAL
+  MAINTENANCE
+  OWNER_USE
+}
+
+enum VillaBlockedDateState {
+  ACTIVE
+  RELEASED
+}
+
 model Villa {
   id       String  @id @default(cuid())
   slug     String  @unique
@@ -152,9 +168,11 @@ model Villa {
   region   Region  @relation(fields: [regionId], references: [id])
   district String?
 
-  status VillaStatus @default(DRAFT)
-  hostId String?
-  host   User?       @relation(fields: [hostId], references: [id])
+  status      VillaStatus      @default(DRAFT)
+  salesStatus VillaSalesStatus @default(OPEN)
+  timezone    String           @default("Europe/Istanbul")
+  hostId      String?
+  host        User?            @relation(fields: [hostId], references: [id])
 
   buildingType BuildingType
   /// T.C. Kültür ve Turizm Bakanlığı Turizm Amaçlı Konut İzin Belge No —
@@ -219,9 +237,11 @@ model Villa {
   reviewedAt     DateTime?
   reviewedBy     String?
 
-  rating      Float   @default(0)
-  reviewCount Int     @default(0)
-  featured    Boolean @default(false)
+  rating        Float     @default(0)
+  reviewCount   Int       @default(0)
+  featured      Boolean   @default(false)
+  featuredOrder Int?
+  featuredUntil DateTime?
 
   rooms        VillaRoom[]
   concepts     Concept[]
@@ -282,8 +302,8 @@ model VillaPriceRule {
   villaId String
   villa   Villa  @relation(fields: [villaId], references: [id], onDelete: Cascade)
 
-  startDate     DateTime
-  endDate       DateTime
+  startDate     DateTime @db.Date
+  endDate       DateTime @db.Date
   pricePerNight Int
   minNights     Int?
 
@@ -297,13 +317,16 @@ model VillaBlockedDate {
   villaId String
   villa   Villa  @relation(fields: [villaId], references: [id], onDelete: Cascade)
 
-  startDate DateTime
-  endDate   DateTime
-  note      String?
+  startDate  DateTime              @db.Date
+  endDate    DateTime              @db.Date
+  kind       VillaBlockedDateKind  @default(MANUAL)
+  state      VillaBlockedDateState @default(ACTIVE)
+  note       String?
+  releasedAt DateTime?
 
   createdAt DateTime @default(now())
 
-  @@index([villaId, startDate])
+  @@index([villaId, state, startDate])
 }
 
 enum ApplicationStatus {

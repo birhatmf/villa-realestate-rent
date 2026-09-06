@@ -21,6 +21,7 @@ export const ADMIN_NAV: NavGroup[] = [
     title: 'Envanter',
     items: [
       { label: 'Villalar', href: '/admin/villalar', icon: 'villa' },
+      { label: 'Öne çıkanlar', href: '/admin/one-cikanlar', icon: 'sparkle' },
       { label: 'Bölgeler', href: '/admin/bolgeler', icon: 'pin' },
       { label: 'Konseptler', href: '/admin/konseptler', icon: 'sparkle' },
     ],

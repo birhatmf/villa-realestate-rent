@@ -7,11 +7,17 @@ const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDat
 const fmt = (d: Date) => d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
 const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-export default function DateRangeField() {
+const parseDefault = (value?: string) => {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isFinite(date.getTime()) && isoDate(date) === value ? date : null;
+};
+
+export default function DateRangeField({ defaultFrom, defaultTo }: { defaultFrom?: string; defaultTo?: string }) {
   const [open, setOpen] = useState(false);
-  const [monthCursor, setMonthCursor] = useState(() => startOfDay(new Date()));
-  const [checkIn, setCheckIn] = useState<Date | null>(null);
-  const [checkOut, setCheckOut] = useState<Date | null>(null);
+  const [monthCursor, setMonthCursor] = useState(() => parseDefault(defaultFrom) ?? startOfDay(new Date()));
+  const [checkIn, setCheckIn] = useState<Date | null>(() => parseDefault(defaultFrom));
+  const [checkOut, setCheckOut] = useState<Date | null>(() => parseDefault(defaultTo));
   const [hover, setHover] = useState<Date | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -52,6 +58,7 @@ export default function DateRangeField() {
     <div ref={ref} className="relative grid grid-cols-2">
       <button
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className="flex flex-col gap-1.5 border-r border-line/60 bg-surface px-6 py-4 text-left transition-colors hover:bg-sand/40"
       >
@@ -60,6 +67,7 @@ export default function DateRangeField() {
       </button>
       <button
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className="flex flex-col gap-1.5 bg-surface px-6 py-4 text-left transition-colors hover:bg-sand/40"
       >
@@ -71,7 +79,7 @@ export default function DateRangeField() {
       <input type="hidden" name="to" value={checkOut ? isoDate(checkOut) : ''} />
 
       {open && (
-        <div className="absolute left-0 top-[calc(100%+0.75rem)] z-50 w-[min(90vw,640px)] rounded-2xl border border-line bg-canvas p-6 text-ink shadow-[0_24px_60px_-16px_rgba(0,0,0,0.35)]">
+        <div className="absolute left-0 top-[calc(100%+0.75rem)] z-50 w-full max-h-[70vh] overflow-y-auto rounded-2xl border border-line bg-canvas p-4 text-ink shadow-[0_24px_60px_-16px_rgba(0,0,0,0.35)] sm:w-[min(80vw,600px)] sm:p-6 lg:left-1/2 lg:-translate-x-1/2">
           <div className="mb-5 flex items-center justify-between">
             <button
               type="button"
@@ -186,6 +194,8 @@ function MonthGrid({
             <button
               key={i}
               type="button"
+              aria-label={d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
+              aria-pressed={!!(isStart || isEnd)}
               disabled={past}
               onClick={() => onPick(d)}
               onMouseEnter={() => onHover(d)}

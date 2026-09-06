@@ -18,12 +18,12 @@ export default function Hero({ content }: { content: Record<string, any> }) {
   }, [slides.length]);
 
   return (
-    <section className="relative flex min-h-[92svh] flex-col justify-end overflow-hidden">
+    <section className="relative z-10 flex min-h-[92svh] flex-col justify-end overflow-visible">
       {slides.map((s, i) => (
         <div
           key={s.image}
           aria-hidden={i !== active}
-          className={`absolute inset-0 transition-opacity duration-[1600ms] ease-[var(--ease-out-soft)] ${
+          className={`absolute inset-0 overflow-hidden transition-opacity duration-[1600ms] ease-[var(--ease-out-soft)] ${
             i === active ? 'opacity-100' : 'opacity-0'
           }`}
         >

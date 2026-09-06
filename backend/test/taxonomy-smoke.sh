@@ -17,6 +17,15 @@ curl -sf -c "$JAR" -X POST "$API/auth/login" -H 'Content-Type: application/json'
 REGIONS_BEFORE=$(curl -sf "$API/regions" | python3 -c "import json,sys;print(len(json.load(sys.stdin)))")
 CONCEPTS_BEFORE=$(curl -sf "$API/concepts" | python3 -c "import json,sys;print(len(json.load(sys.stdin)))")
 echo "  ✓ public /regions ve /concepts erişilebilir ($REGIONS_BEFORE bölge, $CONCEPTS_BEFORE konsept)"
+curl -sf "$API/regions/kas" | python3 -c "import json,sys;d=json.load(sys.stdin);assert d['slug']=='kas' and 'image' in d and 'villaCount' in d" \
+  || fail "public bölge detayı eksik"
+curl -sf "$API/concepts/denize-sifir" | python3 -c "import json,sys;d=json.load(sys.stdin);assert d['slug']=='denize-sifir' and 'description' in d and 'villaCount' in d" \
+  || fail "public konsept detayı eksik"
+CODE=$(curl -s -o /dev/null -w '%{http_code}' "$API/regions/yok-bolge")
+[ "$CODE" = "404" ] || fail "olmayan bölge 404 vermiyor (HTTP $CODE)"
+CODE=$(curl -s -o /dev/null -w '%{http_code}' "$API/concepts/yok-konsept")
+[ "$CODE" = "404" ] || fail "olmayan konsept 404 vermiyor (HTTP $CODE)"
+echo "  ✓ public bölge/konsept detayları, yayın sayısı ve 404"
 
 # ---- bölge CRUD -------------------------------------------------------------
 REGION=$(curl -sf -b "$JAR" -X POST "$API/admin/regions" -H 'Content-Type: application/json' \
@@ -42,6 +51,11 @@ VILLA_ID=$(echo "$VILLA" | python3 -c "import json,sys;print(json.load(sys.stdin
 echo "$VILLA" | python3 -c "import json,sys;d=json.load(sys.stdin);assert d['concepts'][0]['id']=='$CONCEPT_ID'" \
   || fail "villa konsepte bağlanmadı"
 echo "  ✓ villa oluştururken konsepte bağlandı"
+REGION_PUBLIC_COUNT=$(curl -sf "$API/regions/smoke-bolge" | python3 -c "import json,sys;print(json.load(sys.stdin)['villaCount'])")
+CONCEPT_PUBLIC_COUNT=$(curl -sf "$API/concepts/smoke-konsept" | python3 -c "import json,sys;print(json.load(sys.stdin)['villaCount'])")
+[ "$REGION_PUBLIC_COUNT" = "0" ] && [ "$CONCEPT_PUBLIC_COUNT" = "0" ] \
+  || fail "DRAFT villa public taksonomi sayısına dahil edildi"
+echo "  ✓ DRAFT villa public bölge/konsept sayısına dahil değil"
 
 # ---- silme koruması: villası olan bölge silinemez ---------------------------
 CODE=$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -X DELETE "$API/admin/regions/$REGION_ID")
