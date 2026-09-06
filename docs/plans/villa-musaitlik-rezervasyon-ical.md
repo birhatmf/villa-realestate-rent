@@ -1,6 +1,6 @@
 # Villa müsaitliği, rezervasyon ve iCal uygulama planı
 
-Tarih: 6 Eylül 2026. Durum: Aşama 1 kodu ve veri-koruyan SQL migration tamamlandı; geliştirme veritabanına uygulandı. Aşama 2–5 plan aşamasında.
+Tarih: 6 Eylül 2026. Durum: Aşama 1 ve Aşama 2 kodu ile veri-koruyan SQL migration'ları tamamlandı; geliştirme veritabanına uygulandı. Aşama 3–5 plan aşamasında.
 
 Amaç: Aynı villanın aynı gecesinin kendi sistemimizde iki kişiye satılmasını önlemek; ev sahibi, admin ve dış takvim kayıtlarını birlikte değerlendirmek; belirsizliği satış sırasında görünür kılmak. Mevcut NestJS + Prisma + PostgreSQL ve Next.js yapısı korunacak. İlk kapsamda her villa tek rezervasyonla tamamen kiralanır; oda bazlı stok yoktur.
 
@@ -220,6 +220,14 @@ Testler yalnızca mock ile değil, ayrı bağlantılar ve gerçek PostgreSQL tra
 Canlı takip: son başarılı senkronizasyon yaşı, çakışan rezervasyon sayısı, geç ödeme olayları, bekletme dönüşümü ve transaction bekleme/hata oranı. Her ölçümün admin ekranında müdahale edilebilir bir karşılığı olmalı.
 
 Raporlama: satılmış gece, geçici ayrılmış gece, manuel kapalı gece ve dış kaynaktan kapalı gece ayrı gösterilir. Doluluk oranında kullanılan dönem/payda açık yazılır; iCal'deki her meşgul gece satılmış gece veya gelir kabul edilmez.
+
+### Aşama 2 gerçekleşen teslim
+
+- `Booking` yaşam döngüsü `HOLD`, `CONFIRMED`, `EXPIRED` ve `CANCELLED` durumlarıyla eklendi. Bekletme süresi 10 dakikadır; süresi dolan kayıtlar yeni stok yazımı sırasında veritabanı saatine göre serbest bırakılır.
+- Misafir bekletme oluşturma/okuma/bırakma ve admin oluşturma/onay/değişiklik/iptal/listeleme uçları eklendi. Yazma isteklerinde idempotency anahtarı ve güncellemelerde sürüm kontrolü uygulanır.
+- Rezervasyon, manuel kapatma ve fiyat kuralı yazımları önce ilgili villa satırını kilitler. Aktif iç rezervasyonların çakışması PostgreSQL `EXCLUDE` kısıtıyla ikinci kez güvenceye alınır.
+- Halka açık liste, detay takvimi ve müsaitlik kontrolü geçerli bekletmeleri ve onaylı rezervasyonları hesaba katar; müşteri ve iç rezervasyon bilgileri public yanıta girmez.
+- Migration tekrar çalıştırılabilir biçimde izole PostgreSQL üzerinde doğrulandı ve geliştirme veritabanına yedek alınarak uygulandı. 50 eşzamanlı bekletme, idempotent tekrar, bitiş/giriş sınırı, rezervasyon–manuel blok yarışı, süresi dolmuş bekletme ve veritabanı kısıtı testleri geçti.
 
 ## 11. Başlangıç için önerilen ürün kararları
 

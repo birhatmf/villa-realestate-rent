@@ -37,6 +37,7 @@ model User {
 
   villas    Villa[]
   favorites Favorite[]
+  bookings  Booking[]  @relation("BookingGuest")
 
   @@index([role, active])
   @@index([createdAt])
@@ -159,6 +160,18 @@ enum VillaBlockedDateState {
   RELEASED
 }
 
+enum BookingStatus {
+  HOLD
+  CONFIRMED
+  EXPIRED
+  CANCELLED
+}
+
+enum BookingChannel {
+  WEBSITE
+  ADMIN
+}
+
 model Villa {
   id       String  @id @default(cuid())
   slug     String  @unique
@@ -249,6 +262,7 @@ model Villa {
   favorites    Favorite[]
   priceRules   VillaPriceRule[]
   blockedDates VillaBlockedDate[]
+  bookings     Booking[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -327,6 +341,52 @@ model VillaBlockedDate {
   createdAt DateTime @default(now())
 
   @@index([villaId, state, startDate])
+}
+
+model Booking {
+  id      String @id @default(cuid())
+  villaId String
+  villa   Villa  @relation(fields: [villaId], references: [id], onDelete: Restrict)
+
+  guestId String?
+  guest   User?   @relation("BookingGuest", fields: [guestId], references: [id], onDelete: SetNull)
+
+  status  BookingStatus
+  channel BookingChannel
+
+  checkIn  DateTime @db.Date
+  checkOut DateTime @db.Date
+  adults   Int
+  children Int      @default(0)
+  infants  Int      @default(0)
+
+  customerName  String?
+  customerEmail String?
+  customerPhone String?
+
+  currency            String
+  accommodationAmount Int
+  cleaningFeeAmount   Int
+  depositAmount       Int
+  totalAmount         Int
+  priceSnapshot       Json
+
+  holdExpiresAt    DateTime? @db.Timestamptz(3)
+  confirmedAt      DateTime? @db.Timestamptz(3)
+  cancelledAt      DateTime? @db.Timestamptz(3)
+  cancellationNote String?
+
+  idempotencyOwner String
+  idempotencyKey   String
+  requestHash      String
+  version          Int    @default(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([idempotencyOwner, idempotencyKey])
+  @@index([villaId, status, checkIn, checkOut])
+  @@index([guestId, createdAt])
 }
 
 enum ApplicationStatus {

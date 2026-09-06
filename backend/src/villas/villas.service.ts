@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -8,6 +9,7 @@ import type { Prisma, VillaBlockedDateKind, VillaStatus } from '@prisma/client';
 import { rm } from 'fs/promises';
 import { join } from 'path';
 import { PrismaService } from '../prisma.service';
+import { OccupancyService } from '../bookings/occupancy.service';
 import {
   evaluateAvailability,
   formatCalendarDate,
@@ -204,7 +206,10 @@ const PUBLIC_DETAIL_SELECT = {
 
 @Injectable()
 export class VillasService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private occupancy: OccupancyService,
+  ) {}
 
   async list({ hostId, status, regionId, q, page = 1, pageSize = 20 }: ListParams) {
     const take = Math.min(Math.max(pageSize, 1), 100);
@@ -329,6 +334,7 @@ export class VillasService {
     }
 
     if (dates) {
+      const now = new Date();
       const coveringRule = {
         startDate: { lte: dates.checkIn },
         endDate: { gt: dates.checkIn },
@@ -341,6 +347,18 @@ export class VillasService {
               state: 'ACTIVE',
               startDate: { lt: dates.checkOut },
               endDate: { gt: dates.checkIn },
+            },
+          },
+        },
+        {
+          bookings: {
+            none: {
+              checkIn: { lt: dates.checkOut },
+              checkOut: { gt: dates.checkIn },
+              OR: [
+                { status: 'CONFIRMED' },
+                { status: 'HOLD', holdExpiresAt: { gt: now } },
+              ],
             },
           },
         },
@@ -451,6 +469,17 @@ export class VillasService {
     });
     if (!villa) throw new NotFoundException('Villa bulunamadı.');
 
+    const bookingRanges = await this.prisma.booking.findMany({
+      where: {
+        villaId: villa.id,
+        OR: [
+          { status: 'CONFIRMED' },
+          { status: 'HOLD', holdExpiresAt: { gt: new Date() } },
+        ],
+      },
+      select: { checkIn: true, checkOut: true },
+    });
+
     return {
       ...this.withPriceRange(villa),
       priceRules: villa.priceRules.map((rule) => ({
@@ -458,10 +487,16 @@ export class VillasService {
         startDate: formatCalendarDate(rule.startDate),
         endDate: formatCalendarDate(rule.endDate),
       })),
-      blockedDates: villa.blockedDates.map((block) => ({
-        startDate: formatCalendarDate(block.startDate),
-        endDate: formatCalendarDate(block.endDate),
-      })),
+      blockedDates: [
+        ...villa.blockedDates.map((block) => ({
+          startDate: formatCalendarDate(block.startDate),
+          endDate: formatCalendarDate(block.endDate),
+        })),
+        ...bookingRanges.map((booking) => ({
+          startDate: formatCalendarDate(booking.checkIn),
+          endDate: formatCalendarDate(booking.checkOut),
+        })),
+      ],
     };
   }
 
@@ -473,6 +508,7 @@ export class VillasService {
     const villa = await this.prisma.villa.findFirst({
       where: { slug, status: 'PUBLISHED' },
       select: {
+        id: true,
         salesStatus: true,
         minNights: true,
         checkInWeekday: true,
@@ -495,10 +531,29 @@ export class VillasService {
     });
     if (!villa) throw new NotFoundException('Villa bulunamadı.');
 
+    const bookingRanges = await this.prisma.booking.findMany({
+      where: {
+        villaId: villa.id,
+        checkIn: { lt: dates.checkOut },
+        checkOut: { gt: dates.checkIn },
+        OR: [
+          { status: 'CONFIRMED' },
+          { status: 'HOLD', holdExpiresAt: { gt: new Date() } },
+        ],
+      },
+      select: { checkIn: true, checkOut: true },
+    });
+
     return {
       from: formatCalendarDate(dates.checkIn),
       to: formatCalendarDate(dates.checkOut),
-      ...evaluateAvailability(villa, dates, {
+      ...evaluateAvailability({
+        ...villa,
+        blockedDates: [
+          ...villa.blockedDates,
+          ...bookingRanges.map((booking) => ({ startDate: booking.checkIn, endDate: booking.checkOut })),
+        ],
+      }, dates, {
         adults: input.adults ?? 1,
         children: input.children ?? 0,
         infants: input.infants ?? 0,
@@ -558,6 +613,9 @@ export class VillasService {
 
   async remove(id: string, hostId?: string) {
     await this.getScoped(id, hostId);
+    if (await this.prisma.booking.count({ where: { villaId: id } })) {
+      throw new ConflictException('Rezervasyon geçmişi olan villa silinemez; yayından kaldırın.');
+    }
     await this.prisma.villa.delete({ where: { id } });
     // Cascade yalnızca ilişkili satırları siler; diskteki görsel klasörü ayrı temizlenir.
     await rm(join(UPLOAD_ROOT, id), { recursive: true, force: true }).catch(() => {});
@@ -595,26 +653,28 @@ export class VillasService {
     input: { startDate: string; endDate: string; pricePerNight: number; minNights?: number },
     hostId?: string,
   ) {
-    await this.getScoped(villaId, hostId);
     const startDate = parseCalendarDate(input.startDate);
     const endDate = parseCalendarDate(input.endDate);
     if (!(startDate < endDate)) throw new BadRequestException('Bitiş tarihi başlangıçtan sonra olmalı.');
-
-    const overlap = await this.prisma.villaPriceRule.findFirst({
-      where: { villaId, startDate: { lt: endDate }, endDate: { gt: startDate } },
-    });
-    if (overlap) throw new BadRequestException('Bu tarih aralığı mevcut bir fiyat kuralıyla çakışıyor.');
-
-    return this.prisma.villaPriceRule.create({
-      data: { villaId, startDate, endDate, pricePerNight: input.pricePerNight, minNights: input.minNights },
+    return this.occupancy.withVillaLock(villaId, async (tx) => {
+      await this.assertVillaScope(tx, villaId, hostId);
+      const overlap = await tx.villaPriceRule.findFirst({
+        where: { villaId, startDate: { lt: endDate }, endDate: { gt: startDate } },
+      });
+      if (overlap) throw new BadRequestException('Bu tarih aralığı mevcut bir fiyat kuralıyla çakışıyor.');
+      return tx.villaPriceRule.create({
+        data: { villaId, startDate, endDate, pricePerNight: input.pricePerNight, minNights: input.minNights },
+      });
     });
   }
 
   async removePriceRule(villaId: string, ruleId: string, hostId?: string) {
-    await this.getScoped(villaId, hostId);
-    await this.assertChild(this.prisma.villaPriceRule, ruleId, villaId, 'Fiyat kuralı');
-    await this.prisma.villaPriceRule.delete({ where: { id: ruleId } });
-    return { ok: true };
+    return this.occupancy.withVillaLock(villaId, async (tx) => {
+      await this.assertVillaScope(tx, villaId, hostId);
+      await this.assertChild(tx.villaPriceRule, ruleId, villaId, 'Fiyat kuralı');
+      await tx.villaPriceRule.delete({ where: { id: ruleId } });
+      return { ok: true };
+    });
   }
 
   async addBlockedDate(
@@ -622,26 +682,46 @@ export class VillasService {
     input: { startDate: string; endDate: string; kind?: VillaBlockedDateKind; note?: string },
     hostId?: string,
   ) {
-    await this.getScoped(villaId, hostId);
     const startDate = parseCalendarDate(input.startDate);
     const endDate = parseCalendarDate(input.endDate);
     if (!(startDate < endDate)) throw new BadRequestException('Bitiş tarihi başlangıçtan sonra olmalı.');
-    return this.prisma.villaBlockedDate.create({
-      data: { villaId, startDate, endDate, kind: input.kind ?? 'MANUAL', note: input.note },
+    return this.occupancy.withVillaLock(villaId, async (tx) => {
+      await this.assertVillaScope(tx, villaId, hostId);
+      const booking = await tx.booking.findFirst({
+        where: {
+          villaId,
+          status: { in: ['HOLD', 'CONFIRMED'] },
+          checkIn: { lt: endDate },
+          checkOut: { gt: startDate },
+        },
+        select: { id: true },
+      });
+      if (booking) throw new ConflictException('Bu tarihler aktif bir rezervasyonla çakışıyor.');
+      return tx.villaBlockedDate.create({
+        data: { villaId, startDate, endDate, kind: input.kind ?? 'MANUAL', note: input.note },
+      });
     });
   }
 
   async removeBlockedDate(villaId: string, blockId: string, hostId?: string) {
-    await this.getScoped(villaId, hostId);
-    const block = await this.prisma.villaBlockedDate.findUnique({ where: { id: blockId } });
-    if (!block || block.villaId !== villaId) throw new NotFoundException('Bloke tarih bulunamadı.');
-    if (block.state === 'ACTIVE') {
-      await this.prisma.villaBlockedDate.update({
-        where: { id: blockId },
-        data: { state: 'RELEASED', releasedAt: new Date() },
-      });
-    }
-    return { ok: true };
+    return this.occupancy.withVillaLock(villaId, async (tx, now) => {
+      await this.assertVillaScope(tx, villaId, hostId);
+      const block = await tx.villaBlockedDate.findUnique({ where: { id: blockId } });
+      if (!block || block.villaId !== villaId) throw new NotFoundException('Bloke tarih bulunamadı.');
+      if (block.state === 'ACTIVE') {
+        await tx.villaBlockedDate.update({
+          where: { id: blockId },
+          data: { state: 'RELEASED', releasedAt: now },
+        });
+      }
+      return { ok: true };
+    });
+  }
+
+  private async assertVillaScope(tx: Prisma.TransactionClient, villaId: string, hostId?: string) {
+    if (!hostId) return;
+    const villa = await tx.villa.findFirst({ where: { id: villaId, hostId }, select: { id: true } });
+    if (!villa) throw new NotFoundException('Villa bulunamadı.');
   }
 
   private async assertChild(

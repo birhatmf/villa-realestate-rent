@@ -15,4 +15,10 @@ npx prisma db execute --file prisma/sql/20260906_availability_foundation.sql --s
 
 SQL tekrar çalıştırılabilir yapıdadır. `btree_gist` eklentisini açma yetkisi yoksa işlem atomik olarak geri alınır; veritabanı yöneticisi eklentiyi açtıktan sonra yeniden çalıştırılır.
 
+`20260906_booking_core.sql`, Aşama 1'den sonra rezervasyon tablosunu ve aktif `HOLD`/`CONFIRMED` aralıklarının aynı villada çakışmasını engelleyen veritabanı kısıtını ekler:
+
+```sh
+npx prisma db execute --file prisma/sql/20260906_booking_core.sql --schema prisma/schema.prisma
+```
+
 Kalıcı Prisma Migrate geçmişine geçerken önce mevcut şema için baseline oluşturulup bu migration uygulanmış olarak işaretlenmelidir. Canlı veritabanı resetlenmez ve veri silen seed komutu kullanılmaz.
