@@ -32,6 +32,7 @@ import {
   WEEKDAYS,
 } from '@/lib/villaSchema';
 import { Field, Row, Section, Select, TextArea, TextInput, Toggle } from './formShared';
+import type { CalendarEvent } from '@/lib/bookingApi';
 
 type Region = { id: string; slug: string; name: string };
 
@@ -937,6 +938,17 @@ function CalendarManager({
     note: string;
   }>({ startDate: '', endDate: '', kind: 'MANUAL', note: '' });
   const [error, setError] = useState<string | null>(null);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+
+  const loadCalendar = useCallback(async () => {
+    const today = new Date();
+    const from = today.toISOString().slice(0, 10);
+    const to = new Date(today.getTime() + 62 * 86_400_000).toISOString().slice(0, 10);
+    const result = await api.calendar(villaId, from, to);
+    setEvents(result.events);
+  }, [api, villaId]);
+
+  useEffect(() => { void loadCalendar().catch(() => {}); }, [loadCalendar]);
 
   async function add() {
     setError(null);
@@ -944,6 +956,7 @@ function CalendarManager({
       await api.addBlockedDate(villaId, form);
       setForm({ startDate: '', endDate: '', kind: 'MANUAL', note: '' });
       onChange();
+      await loadCalendar();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Eklenemedi.');
     }
@@ -952,27 +965,28 @@ function CalendarManager({
   return (
     <div>
       <div className="divide-y divide-line border-y border-line">
-        {blocks.map((b) => (
-          <div key={b.id} className="flex items-center justify-between gap-4 py-3">
+        {events.map((event) => (
+          <div key={`${event.source}-${event.id}`} className="flex items-center justify-between gap-4 py-3">
             <span className="text-[0.88rem] text-ink">
-              {fmtDate(b.startDate)} – {fmtDate(b.endDate)}
+              {fmtDate(event.startDate)} – {fmtDate(event.endDate)}
             </span>
-            <span className="text-[0.85rem] text-muted">{b.note}</span>
+            <span className="text-[0.85rem] text-muted">{event.title}</span>
             <span className="rounded-full bg-sand px-2.5 py-1 text-[0.74rem] text-muted">
-              {BLOCK_KIND_LABEL[b.kind]}
+              {event.source === 'BOOKING' ? (event.kind === 'HOLD' ? 'Bekletme' : 'Rezervasyon') : BLOCK_KIND_LABEL[event.kind]}
             </span>
-            <button
+            {event.source === 'BLOCK' && <button
               onClick={async () => {
-                await api.removeBlockedDate(villaId, b.id);
+                await api.removeBlockedDate(villaId, event.id, event.version);
                 onChange();
+                await loadCalendar();
               }}
               className="text-[0.8rem] text-muted transition-colors hover:text-red-700"
             >
               Kaldır
-            </button>
+            </button>}
           </div>
         ))}
-        {!blocks.length && <p className="py-3 text-[0.85rem] text-muted">Bloke edilmiş tarih yok.</p>}
+        {!events.length && !blocks.length && <p className="py-3 text-[0.85rem] text-muted">Önümüzdeki 62 günde dolu tarih yok.</p>}
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">

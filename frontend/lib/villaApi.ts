@@ -1,6 +1,7 @@
 'use client';
 
 import { req } from './http';
+import type { CalendarData } from './bookingApi';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
 
@@ -41,6 +42,7 @@ export type VillaBlockedDate = {
   state: 'ACTIVE' | 'RELEASED';
   note: string | null;
   releasedAt: string | null;
+  version: number;
 };
 
 /** Form gönderirken kullanılan şekil — scalar alanların tamamı, oda listesi dahil. */
@@ -244,8 +246,16 @@ export function createVillaApi(scope: 'admin' | 'host') {
     addBlockedDate: (villaId: string, data: { startDate: string; endDate: string; kind?: VillaBlockedDate['kind']; note?: string }) =>
       req<VillaBlockedDate>(`${base}/${villaId}/blocked-dates`, { method: 'POST', body: JSON.stringify(data) }),
 
-    removeBlockedDate: (villaId: string, blockId: string) =>
-      req<{ ok: true }>(`${base}/${villaId}/blocked-dates/${blockId}`, { method: 'DELETE' }),
+    removeBlockedDate: (villaId: string, blockId: string, version: number) =>
+      req<{ ok: true }>(`${base}/${villaId}/blocked-dates/${blockId}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ version }),
+      }),
+
+    calendar: (villaId: string, from: string, to: string) => {
+      const qs = new URLSearchParams({ villaId, from, to });
+      return req<CalendarData>(`/${scope}/calendar?${qs}`);
+    },
   };
 }
 

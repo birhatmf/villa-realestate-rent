@@ -1,6 +1,6 @@
 # Villa müsaitliği, rezervasyon ve iCal uygulama planı
 
-Tarih: 6 Eylül 2026. Durum: Aşama 1 ve Aşama 2 kodu ile veri-koruyan SQL migration'ları tamamlandı; geliştirme veritabanına uygulandı. Aşama 3–5 plan aşamasında.
+Tarih: 6 Eylül 2026. Durum: Aşama 1–3 kodu ile veri-koruyan SQL migration'ları tamamlandı; geliştirme veritabanına uygulandı. Aşama 4–5 plan aşamasında.
 
 Amaç: Aynı villanın aynı gecesinin kendi sistemimizde iki kişiye satılmasını önlemek; ev sahibi, admin ve dış takvim kayıtlarını birlikte değerlendirmek; belirsizliği satış sırasında görünür kılmak. Mevcut NestJS + Prisma + PostgreSQL ve Next.js yapısı korunacak. İlk kapsamda her villa tek rezervasyonla tamamen kiralanır; oda bazlı stok yoktur.
 
@@ -228,6 +228,15 @@ Raporlama: satılmış gece, geçici ayrılmış gece, manuel kapalı gece ve d�
 - Rezervasyon, manuel kapatma ve fiyat kuralı yazımları önce ilgili villa satırını kilitler. Aktif iç rezervasyonların çakışması PostgreSQL `EXCLUDE` kısıtıyla ikinci kez güvenceye alınır.
 - Halka açık liste, detay takvimi ve müsaitlik kontrolü geçerli bekletmeleri ve onaylı rezervasyonları hesaba katar; müşteri ve iç rezervasyon bilgileri public yanıta girmez.
 - Migration tekrar çalıştırılabilir biçimde izole PostgreSQL üzerinde doğrulandı ve geliştirme veritabanına yedek alınarak uygulandı. 50 eşzamanlı bekletme, idempotent tekrar, bitiş/giriş sınırı, rezervasyon–manuel blok yarışı, süresi dolmuş bekletme ve veritabanı kısıtı testleri geçti.
+
+### Aşama 3 gerçekleşen teslim
+
+- Admin paneline villa × gün doluluk şeridi, bölge/villa filtresi, ay gezintisi ve kaynak renkleri olan rezervasyon takvimi eklendi. Boş hücreden onaylı rezervasyon veya manuel kapatma başlatılabilir; dolu hücreden rezervasyon değiştirme/onaylama/iptal ya da ilgili blok nedenini kaldırma yapılabilir.
+- Host takvim API'si yalnızca kendi villalarını döndürür ve müşteri iletişim bilgilerini maskeler. Villa düzenleme ekranındaki takvim önündeki 62 gün için rezervasyon ve manuel kapatmaları birlikte gösterir.
+- Misafir takvimi giriş/çıkış aralığı ve kişi dağılımı seçtirir, dolu gecelerin üzerinden geçilmesini engeller ve seçimi ortak public müsaitlik ucunda yeniden doğrular. Başka konaklamanın giriş günü çıkış olarak seçilebilir.
+- Rezervasyon, bekletme, manuel kapatma, fiyat kuralı, satış kuralı ve villa durum değişiklikleri aynı transaction içinde aktör, gerekçe ve sınırlı önce/sonra verisiyle `CalendarAudit` kaydına yazılır.
+- Takvim blokları ve rezervasyon düzenlemeleri güncel `version` bekler. İki görevlinin eşzamanlı değişikliğinde ilk işlem kazanır; eski sürüm `409` alır ve arayüz güncel takvimi yeniden yükler.
+- Migration iki kez uygulanarak tekrar güvenliği doğrulandı; gerçek PostgreSQL yarış/audit/takvim testleri, backend ve frontend üretim derlemeleri ve tarayıcı üzerinden admin/misafir akışları geçti.
 
 ## 11. Başlangıç için önerilen ürün kararları
 

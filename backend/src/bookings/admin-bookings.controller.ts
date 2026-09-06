@@ -40,17 +40,17 @@ export class AdminBookingsController {
   }
 
   @Post(':id/confirm')
-  confirm(@Param('id') id: string, @Body() dto: BookingVersionDto) {
-    return this.bookings.confirm(id, dto.version);
+  confirm(@Param('id') id: string, @Body() dto: BookingVersionDto, @Req() req: AuthRequest) {
+    return this.bookings.confirm(id, dto.version, req.user.sub);
   }
 
   @Patch(':id')
-  change(@Param('id') id: string, @Body() dto: ChangeBookingDto) {
-    return this.bookings.change(id, dto);
+  change(@Param('id') id: string, @Body() dto: ChangeBookingDto, @Req() req: AuthRequest) {
+    return this.bookings.change(id, dto, req.user.sub);
   }
 
   @Post(':id/cancel')
-  cancel(@Param('id') id: string, @Body() dto: CancelBookingDto) {
-    return this.bookings.cancel(id, dto.version, dto.note);
+  cancel(@Param('id') id: string, @Body() dto: CancelBookingDto, @Req() req: AuthRequest) {
+    return this.bookings.cancel(id, dto.version, dto.note, req.user.sub);
   }
 }

@@ -37,7 +37,8 @@ model User {
 
   villas    Villa[]
   favorites Favorite[]
-  bookings  Booking[]  @relation("BookingGuest")
+  bookings  Booking[]       @relation("BookingGuest")
+  audits    CalendarAudit[] @relation("CalendarAuditActor")
 
   @@index([role, active])
   @@index([createdAt])
@@ -256,13 +257,14 @@ model Villa {
   featuredOrder Int?
   featuredUntil DateTime?
 
-  rooms        VillaRoom[]
-  concepts     Concept[]
-  images       VillaImage[]
-  favorites    Favorite[]
-  priceRules   VillaPriceRule[]
-  blockedDates VillaBlockedDate[]
-  bookings     Booking[]
+  rooms          VillaRoom[]
+  concepts       Concept[]
+  images         VillaImage[]
+  favorites      Favorite[]
+  priceRules     VillaPriceRule[]
+  blockedDates   VillaBlockedDate[]
+  bookings       Booking[]
+  calendarAudits CalendarAudit[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -337,8 +339,10 @@ model VillaBlockedDate {
   state      VillaBlockedDateState @default(ACTIVE)
   note       String?
   releasedAt DateTime?
+  version    Int                   @default(0)
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([villaId, state, startDate])
 }
@@ -387,6 +391,26 @@ model Booking {
   @@unique([idempotencyOwner, idempotencyKey])
   @@index([villaId, status, checkIn, checkOut])
   @@index([guestId, createdAt])
+}
+
+model CalendarAudit {
+  id      String  @id @default(cuid())
+  villaId String
+  villa   Villa   @relation(fields: [villaId], references: [id], onDelete: Restrict)
+  actorId String?
+  actor   User?   @relation("CalendarAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  entityType String
+  entityId   String
+  action     String
+  reason     String?
+  before     Json?
+  after      Json?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([villaId, createdAt])
+  @@index([entityType, entityId])
 }
 
 enum ApplicationStatus {

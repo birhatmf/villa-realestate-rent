@@ -138,6 +138,10 @@ export class BlockedDateDto {
   @IsOptional() @IsString() @Length(0, 300) note?: string;
 }
 
+export class BlockedDateVersionDto {
+  @IsInt() @Min(0) version!: number;
+}
+
 export class ImageReorderDto {
   @IsOptional() @IsInt() @Min(0) order?: number;
   @IsOptional() @IsBoolean() isCover?: boolean;

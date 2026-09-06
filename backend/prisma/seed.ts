@@ -254,6 +254,7 @@ const CONCEPTS = [
 ];
 
 async function main() {
+  await prisma.calendarAudit.deleteMany();
   await prisma.booking.deleteMany();
   await prisma.setting.upsert({
     where: { key: 'footer' },

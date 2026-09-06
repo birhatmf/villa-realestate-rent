@@ -23,6 +23,7 @@ import { Roles, RolesGuard } from '../auth/roles.guard';
 import {
   assertCreateRequired,
   BlockedDateDto,
+  BlockedDateVersionDto,
   IMAGE_CATEGORIES,
   ImageReorderDto,
   PriceRuleDto,
@@ -74,8 +75,8 @@ export class AdminVillasController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: VillaInputDto) {
-    return this.villas.update(id, dto as any);
+  update(@Param('id') id: string, @Body() dto: VillaInputDto, @Req() req: Request & { user: { sub: string } }) {
+    return this.villas.update(id, dto as any, undefined, req.user.sub);
   }
 
   @Delete(':id')
@@ -115,22 +116,27 @@ export class AdminVillasController {
   }
 
   @Post(':id/price-rules')
-  addPriceRule(@Param('id') id: string, @Body() dto: PriceRuleDto) {
-    return this.villas.addPriceRule(id, dto);
+  addPriceRule(@Param('id') id: string, @Body() dto: PriceRuleDto, @Req() req: Request & { user: { sub: string } }) {
+    return this.villas.addPriceRule(id, dto, undefined, req.user.sub);
   }
 
   @Delete(':id/price-rules/:ruleId')
-  removePriceRule(@Param('id') id: string, @Param('ruleId') ruleId: string) {
-    return this.villas.removePriceRule(id, ruleId);
+  removePriceRule(@Param('id') id: string, @Param('ruleId') ruleId: string, @Req() req: Request & { user: { sub: string } }) {
+    return this.villas.removePriceRule(id, ruleId, undefined, req.user.sub);
   }
 
   @Post(':id/blocked-dates')
-  addBlockedDate(@Param('id') id: string, @Body() dto: BlockedDateDto) {
-    return this.villas.addBlockedDate(id, dto);
+  addBlockedDate(@Param('id') id: string, @Body() dto: BlockedDateDto, @Req() req: Request & { user: { sub: string } }) {
+    return this.villas.addBlockedDate(id, dto, undefined, req.user.sub);
   }
 
   @Delete(':id/blocked-dates/:blockId')
-  removeBlockedDate(@Param('id') id: string, @Param('blockId') blockId: string) {
-    return this.villas.removeBlockedDate(id, blockId);
+  removeBlockedDate(
+    @Param('id') id: string,
+    @Param('blockId') blockId: string,
+    @Body() dto: BlockedDateVersionDto,
+    @Req() req: Request & { user: { sub: string } },
+  ) {
+    return this.villas.removeBlockedDate(id, blockId, dto.version, undefined, req.user.sub);
   }
 }

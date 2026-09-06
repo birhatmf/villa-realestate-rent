@@ -101,6 +101,12 @@ export class BookingsService {
           },
           select: BOOKING_SELECT,
         });
+        await this.audit(tx, booking, userId, 'HOLD_CREATED', undefined, {
+          status: booking.status,
+          checkIn: formatCalendarDate(booking.checkIn),
+          checkOut: formatCalendarDate(booking.checkOut),
+          holdExpiresAt: booking.holdExpiresAt?.toISOString(),
+        });
         return this.response(booking);
       });
     } catch (error) {
@@ -158,6 +164,11 @@ export class BookingsService {
           },
           select: BOOKING_SELECT,
         });
+        await this.audit(tx, booking, actorId, 'BOOKING_CREATED', undefined, {
+          status: booking.status,
+          checkIn: formatCalendarDate(booking.checkIn),
+          checkOut: formatCalendarDate(booking.checkOut),
+        });
         return this.response(booking);
       });
     } catch (error) {
@@ -165,7 +176,7 @@ export class BookingsService {
     }
   }
 
-  async confirm(id: string, expectedVersion: number) {
+  async confirm(id: string, expectedVersion: number, actorId: string) {
     const target = await this.bookingTarget(id);
     return this.occupancy.withVillaLock(target.villaId, async (tx, now) => {
       const booking = await tx.booking.findUnique({ where: { id }, select: BOOKING_SELECT });
@@ -184,15 +195,19 @@ export class BookingsService {
       );
       this.assertAvailable(result.reasons);
 
-      return this.response(await tx.booking.update({
+      const updated = await tx.booking.update({
         where: { id },
         data: { status: 'CONFIRMED', holdExpiresAt: null, confirmedAt: now, version: { increment: 1 } },
         select: BOOKING_SELECT,
-      }));
+      });
+      await this.audit(tx, updated, actorId, 'BOOKING_CONFIRMED', { status: booking.status }, {
+        status: updated.status,
+      });
+      return this.response(updated);
     });
   }
 
-  async change(id: string, input: ChangeBookingDto) {
+  async change(id: string, input: ChangeBookingDto, actorId: string) {
     const target = await this.bookingTarget(id);
     const normalized = this.normalizeStay(input);
     const dates = parseStayDates(input.from, input.to);
@@ -207,7 +222,7 @@ export class BookingsService {
       const { villa, result } = await this.occupancy.checkAvailability(tx, booking.villaId, dates, normalized, id);
       this.assertAvailable(result.reasons);
       const quote = this.occupancy.quote(villa, dates);
-      return this.response(await tx.booking.update({
+      const updated = await tx.booking.update({
         where: { id },
         data: {
           checkIn: dates.checkIn,
@@ -218,11 +233,34 @@ export class BookingsService {
           version: { increment: 1 },
         },
         select: BOOKING_SELECT,
-      }));
+      });
+      await this.audit(
+        tx,
+        updated,
+        actorId,
+        'BOOKING_CHANGED',
+        {
+          checkIn: formatCalendarDate(booking.checkIn),
+          checkOut: formatCalendarDate(booking.checkOut),
+          adults: booking.adults,
+          children: booking.children,
+          infants: booking.infants,
+          totalAmount: booking.totalAmount,
+        },
+        {
+          checkIn: formatCalendarDate(updated.checkIn),
+          checkOut: formatCalendarDate(updated.checkOut),
+          adults: updated.adults,
+          children: updated.children,
+          infants: updated.infants,
+          totalAmount: updated.totalAmount,
+        },
+      );
+      return this.response(updated);
     });
   }
 
-  async cancel(id: string, expectedVersion: number, note: string) {
+  async cancel(id: string, expectedVersion: number, note: string, actorId: string) {
     const target = await this.bookingTarget(id);
     return this.occupancy.withVillaLock(target.villaId, async (tx, now) => {
       const booking = await tx.booking.findUnique({ where: { id }, select: BOOKING_SELECT });
@@ -230,7 +268,7 @@ export class BookingsService {
       if (booking.status === 'CANCELLED') return this.response(booking);
       this.assertVersion(booking.version, expectedVersion);
       if (booking.status === 'EXPIRED') throw new ConflictException('Süresi dolmuş rezervasyon iptal edilemez.');
-      return this.response(await tx.booking.update({
+      const updated = await tx.booking.update({
         where: { id },
         data: {
           status: 'CANCELLED',
@@ -239,7 +277,11 @@ export class BookingsService {
           version: { increment: 1 },
         },
         select: BOOKING_SELECT,
-      }));
+      });
+      await this.audit(tx, updated, actorId, 'BOOKING_CANCELLED', { status: booking.status }, {
+        status: updated.status,
+      }, note.trim());
+      return this.response(updated);
     });
   }
 
@@ -254,7 +296,7 @@ export class BookingsService {
       if (!booking) throw new NotFoundException('Rezervasyon bulunamadı.');
       if (booking.status === 'EXPIRED' || booking.status === 'CANCELLED') return this.response(booking);
       if (booking.status !== 'HOLD') throw new ForbiddenException('Onaylı rezervasyonu yalnızca destek ekibi iptal edebilir.');
-      return this.response(await tx.booking.update({
+      const updated = await tx.booking.update({
         where: { id },
         data: {
           status: 'CANCELLED',
@@ -263,7 +305,11 @@ export class BookingsService {
           version: { increment: 1 },
         },
         select: BOOKING_SELECT,
-      }));
+      });
+      await this.audit(tx, updated, userId, 'HOLD_RELEASED', { status: booking.status }, {
+        status: updated.status,
+      }, 'Misafir bekletmeyi bıraktı.');
+      return this.response(updated);
     });
   }
 
@@ -364,6 +410,29 @@ export class BookingsService {
 
   private nights(booking: { checkIn: Date; checkOut: Date }) {
     return Math.round((booking.checkOut.getTime() - booking.checkIn.getTime()) / 86_400_000);
+  }
+
+  private audit(
+    tx: Prisma.TransactionClient,
+    booking: { id: string; villaId: string },
+    actorId: string,
+    action: string,
+    before?: Prisma.InputJsonObject,
+    after?: Prisma.InputJsonObject,
+    reason?: string,
+  ) {
+    return tx.calendarAudit.create({
+      data: {
+        villaId: booking.villaId,
+        actorId,
+        entityType: 'BOOKING',
+        entityId: booking.id,
+        action,
+        reason,
+        before,
+        after,
+      },
+    });
   }
 
   private response(booking: BookingRecord | (BookingRecord & { requestHash: string })) {

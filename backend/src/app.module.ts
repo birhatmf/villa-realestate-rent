@@ -13,6 +13,8 @@ import { AdminBookingsController } from './bookings/admin-bookings.controller';
 import { BookingsController } from './bookings/bookings.controller';
 import { BookingsService } from './bookings/bookings.service';
 import { OccupancyService } from './bookings/occupancy.service';
+import { AdminCalendarController, HostCalendarController } from './bookings/calendar.controller';
+import { CalendarService } from './bookings/calendar.service';
 import { FeaturedController } from './villas/featured.controller';
 import { AdminHostApplicationsController } from './host-applications/admin-host-applications.controller';
 import { HostApplicationsController } from './host-applications/host-applications.controller';
@@ -53,6 +55,8 @@ import { VillasService } from './villas/villas.service';
     AdminHostApplicationsController,
     AdminBookingsController,
     BookingsController,
+    AdminCalendarController,
+    HostCalendarController,
     AdminVillasController,
     FeaturedController,
     HostVillasController,
@@ -72,6 +76,7 @@ import { VillasService } from './villas/villas.service';
     FavoritesService,
     BookingsService,
     OccupancyService,
+    CalendarService,
   ],
 })
 export class AppModule {}

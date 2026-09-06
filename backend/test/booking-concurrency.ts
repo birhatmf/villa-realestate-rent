@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { BookingsService } from '../src/bookings/bookings.service';
+import { CalendarService } from '../src/bookings/calendar.service';
 import { OccupancyService } from '../src/bookings/occupancy.service';
 import { PrismaService } from '../src/prisma.service';
 import { VillasService } from '../src/villas/villas.service';
@@ -13,6 +14,7 @@ if (process.env.ALLOW_BOOKING_TEST !== '1') {
 const prisma = new PrismaService();
 const occupancy = new OccupancyService(prisma);
 const bookings = new BookingsService(prisma, occupancy);
+const calendar = new CalendarService(prisma);
 const villas = new VillasService(prisma, occupancy);
 const ownerPrefix = `booking-test-${Date.now()}`;
 let guestId: string | undefined;
@@ -168,8 +170,58 @@ async function main() {
     `${ownerPrefix}-after-expiry`,
   );
   assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: expired.id } })).status, 'EXPIRED');
+  await prisma.booking.deleteMany({ where: { guestId: guest.id } });
 
-  console.log('booking-concurrency: yarış, idempotency, sınır, blok, limit, süre aşımı ve DB kısıtı geçti');
+  const managed = await bookings.createConfirmed(
+    {
+      villaId: villa.id,
+      from: '2036-04-10',
+      to: '2036-04-15',
+      adults: 2,
+      customerName: 'Takvim Testi',
+      customerEmail: 'calendar@example.test',
+    },
+    guest.id,
+    `${ownerPrefix}-managed`,
+  );
+  const concurrentChanges = await Promise.allSettled([
+    bookings.change(managed.id, { from: '2036-04-11', to: '2036-04-16', adults: 2, version: 0 }, guest.id),
+    bookings.change(managed.id, { from: '2036-04-12', to: '2036-04-17', adults: 2, version: 0 }, guest.id),
+  ]);
+  assert.equal(concurrentChanges.filter((result) => result.status === 'fulfilled').length, 1);
+  assert.ok(concurrentChanges.filter((result) => result.status === 'rejected').every((result) => result.reason instanceof ConflictException));
+
+  const calendarRange = await calendar.range({ from: '2036-04-01', to: '2036-05-01', villaId: villa.id });
+  assert.equal(calendarRange.events.filter((event) => event.source === 'BOOKING').length, 1);
+  const block = await villas.addBlockedDate(
+    villa.id,
+    { startDate: '2036-05-01', endDate: '2036-05-05', kind: 'MAINTENANCE', note: ownerPrefix },
+    undefined,
+    guest.id,
+  );
+  const secondBlock = await villas.addBlockedDate(
+    villa.id,
+    { startDate: '2036-05-03', endDate: '2036-05-07', kind: 'OWNER_USE', note: ownerPrefix },
+    undefined,
+    guest.id,
+  );
+  const overlappingReasons = await calendar.range({ from: '2036-05-01', to: '2036-05-10', villaId: villa.id });
+  assert.equal(overlappingReasons.events.filter((event) => event.source === 'BLOCK').length, 2);
+  await assert.rejects(
+    villas.removeBlockedDate(villa.id, block.id, block.version + 1, undefined, guest.id),
+    (error: unknown) => error instanceof ConflictException,
+  );
+  await villas.removeBlockedDate(villa.id, block.id, block.version, undefined, guest.id);
+  const remainingReason = await calendar.range({ from: '2036-05-01', to: '2036-05-10', villaId: villa.id });
+  assert.equal(remainingReason.events.filter((event) => event.source === 'BLOCK').length, 1);
+  await villas.removeBlockedDate(villa.id, secondBlock.id, secondBlock.version, undefined, guest.id);
+  const history = await calendar.audit(villa.id, 20);
+  assert.ok(history.some((entry) => entry.action === 'BOOKING_CREATED'));
+  assert.ok(history.some((entry) => entry.action === 'BOOKING_CHANGED'));
+  assert.ok(history.some((entry) => entry.action === 'BLOCK_CREATED'));
+  assert.ok(history.some((entry) => entry.action === 'BLOCK_RELEASED'));
+
+  console.log('booking-concurrency: yarış, sürüm, audit, takvim, blok, limit, süre aşımı ve DB kısıtı geçti');
 }
 
 main()

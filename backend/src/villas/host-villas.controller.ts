@@ -22,6 +22,7 @@ import { Roles, RolesGuard } from '../auth/roles.guard';
 import {
   assertCreateRequired,
   BlockedDateDto,
+  BlockedDateVersionDto,
   IMAGE_CATEGORIES,
   ImageReorderDto,
   PriceRuleDto,
@@ -83,7 +84,7 @@ export class HostVillasController {
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: VillaInputDto, @Req() req: Req) {
-    return this.villas.update(id, stripHostOnlyFields(dto) as any, req.user.sub);
+    return this.villas.update(id, stripHostOnlyFields(dto) as any, req.user.sub, req.user.sub);
   }
 
   @Delete(':id')
@@ -127,21 +128,26 @@ export class HostVillasController {
 
   @Post(':id/price-rules')
   addPriceRule(@Param('id') id: string, @Body() dto: PriceRuleDto, @Req() req: Req) {
-    return this.villas.addPriceRule(id, dto, req.user.sub);
+    return this.villas.addPriceRule(id, dto, req.user.sub, req.user.sub);
   }
 
   @Delete(':id/price-rules/:ruleId')
   removePriceRule(@Param('id') id: string, @Param('ruleId') ruleId: string, @Req() req: Req) {
-    return this.villas.removePriceRule(id, ruleId, req.user.sub);
+    return this.villas.removePriceRule(id, ruleId, req.user.sub, req.user.sub);
   }
 
   @Post(':id/blocked-dates')
   addBlockedDate(@Param('id') id: string, @Body() dto: BlockedDateDto, @Req() req: Req) {
-    return this.villas.addBlockedDate(id, dto, req.user.sub);
+    return this.villas.addBlockedDate(id, dto, req.user.sub, req.user.sub);
   }
 
   @Delete(':id/blocked-dates/:blockId')
-  removeBlockedDate(@Param('id') id: string, @Param('blockId') blockId: string, @Req() req: Req) {
-    return this.villas.removeBlockedDate(id, blockId, req.user.sub);
+  removeBlockedDate(
+    @Param('id') id: string,
+    @Param('blockId') blockId: string,
+    @Body() dto: BlockedDateVersionDto,
+    @Req() req: Req,
+  ) {
+    return this.villas.removeBlockedDate(id, blockId, dto.version, req.user.sub, req.user.sub);
   }
 }

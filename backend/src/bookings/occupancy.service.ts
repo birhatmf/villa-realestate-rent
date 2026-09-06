@@ -49,10 +49,26 @@ export class OccupancyService {
             if (!locked.length) throw new NotFoundException('Villa bulunamadı.');
 
             const [{ now }] = await tx.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`;
-            await tx.booking.updateMany({
+            const expired = await tx.booking.findMany({
               where: { villaId, status: 'HOLD', holdExpiresAt: { lte: now } },
+              select: { id: true, holdExpiresAt: true },
+            });
+            await tx.booking.updateMany({
+              where: { id: { in: expired.map((booking) => booking.id) } },
               data: { status: 'EXPIRED', version: { increment: 1 } },
             });
+            if (expired.length) {
+              await tx.calendarAudit.createMany({
+                data: expired.map((booking) => ({
+                  villaId,
+                  entityType: 'BOOKING',
+                  entityId: booking.id,
+                  action: 'HOLD_EXPIRED',
+                  before: { status: 'HOLD', holdExpiresAt: booking.holdExpiresAt?.toISOString() ?? null },
+                  after: { status: 'EXPIRED' },
+                })),
+              });
+            }
             return work(tx, now);
           },
           { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, maxWait: 5_000, timeout: 10_000 },

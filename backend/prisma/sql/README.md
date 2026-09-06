@@ -21,4 +21,10 @@ SQL tekrar çalıştırılabilir yapıdadır. `btree_gist` eklentisini açma yet
 npx prisma db execute --file prisma/sql/20260906_booking_core.sql --schema prisma/schema.prisma
 ```
 
+`20260906_calendar_management.sql`, takvim bloklarına sürüm alanı ve rezervasyon/takvim işlem geçmişini ekler:
+
+```sh
+npx prisma db execute --file prisma/sql/20260906_calendar_management.sql --schema prisma/schema.prisma
+```
+
 Kalıcı Prisma Migrate geçmişine geçerken önce mevcut şema için baseline oluşturulup bu migration uygulanmış olarak işaretlenmelidir. Canlı veritabanı resetlenmez ve veri silen seed komutu kullanılmaz.

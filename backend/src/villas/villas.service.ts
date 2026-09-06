@@ -587,11 +587,22 @@ export class VillasService {
     return this.prisma.villa.create({ data, include: DETAIL_INCLUDE });
   }
 
-  async update(id: string, input: Partial<VillaInput>, hostId?: string) {
-    const villa = await this.getScoped(id, hostId);
+  async update(id: string, input: Partial<VillaInput>, hostId?: string, actorId?: string) {
     const { rooms, conceptIds, ...rest } = input;
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.occupancy.withVillaLock(id, async (tx) => {
+      await this.assertVillaScope(tx, id, hostId);
+      const before = await tx.villa.findUniqueOrThrow({
+        where: { id },
+        select: {
+          pricePerNight: true,
+          minNights: true,
+          checkInWeekday: true,
+          cleaningFee: true,
+          cleaningFeeThresholdNights: true,
+          depositAmount: true,
+        },
+      });
       if (rooms) {
         await tx.villaRoom.deleteMany({ where: { villaId: id } });
         if (rooms.length) {
@@ -600,21 +611,53 @@ export class VillasService {
           });
         }
       }
-      return tx.villa.update({
-        where: { id: villa.id },
+      const updated = await tx.villa.update({
+        where: { id },
         data: {
           ...this.mapScalars(rest),
           concepts: conceptIds ? { set: conceptIds.map((id) => ({ id })) } : undefined,
         },
         include: DETAIL_INCLUDE,
       });
+      const ruleFields: (keyof VillaInput)[] = [
+        'pricePerNight',
+        'minNights',
+        'checkInWeekday',
+        'cleaningFee',
+        'cleaningFeeThresholdNights',
+        'depositAmount',
+      ];
+      if (ruleFields.some((field) => field in input)) {
+        await tx.calendarAudit.create({
+          data: {
+            villaId: id,
+            actorId,
+            entityType: 'VILLA',
+            entityId: id,
+            action: 'VILLA_RULES_CHANGED',
+            before,
+            after: {
+              pricePerNight: updated.pricePerNight,
+              minNights: updated.minNights,
+              checkInWeekday: updated.checkInWeekday,
+              cleaningFee: updated.cleaningFee,
+              cleaningFeeThresholdNights: updated.cleaningFeeThresholdNights,
+              depositAmount: updated.depositAmount,
+            },
+          },
+        });
+      }
+      return updated;
     });
   }
 
   async remove(id: string, hostId?: string) {
     await this.getScoped(id, hostId);
-    if (await this.prisma.booking.count({ where: { villaId: id } })) {
-      throw new ConflictException('Rezervasyon geçmişi olan villa silinemez; yayından kaldırın.');
+    if (
+      (await this.prisma.booking.count({ where: { villaId: id } })) ||
+      (await this.prisma.calendarAudit.count({ where: { villaId: id } }))
+    ) {
+      throw new ConflictException('Takvim geçmişi olan villa silinemez; yayından kaldırın.');
     }
     await this.prisma.villa.delete({ where: { id } });
     // Cascade yalnızca ilişkili satırları siler; diskteki görsel klasörü ayrı temizlenir.
@@ -624,27 +667,54 @@ export class VillasService {
 
   /** Yalnızca admin çağırır — controller seviyesinde @Roles('ADMIN') ile kısıtlı. */
   async review(id: string, status: 'PUBLISHED' | 'REJECTED', reviewNote: string | undefined, actorId: string) {
-    const villa = await this.get(id);
-    if (status === 'PUBLISHED' && villa.images.length < 15) {
-      throw new BadRequestException('Yayınlamak için en az 15 fotoğraf gerekli.');
-    }
-    return this.prisma.villa.update({
-      where: { id },
-      data: { status, reviewNote, reviewedAt: new Date(), reviewedBy: actorId },
-      include: DETAIL_INCLUDE,
+    return this.occupancy.withVillaLock(id, async (tx, now) => {
+      const villa = await tx.villa.findUnique({ where: { id }, select: { status: true, _count: { select: { images: true } } } });
+      if (!villa) throw new NotFoundException('Villa bulunamadı.');
+      if (status === 'PUBLISHED' && villa._count.images < 15) {
+        throw new BadRequestException('Yayınlamak için en az 15 fotoğraf gerekli.');
+      }
+      const updated = await tx.villa.update({
+        where: { id },
+        data: { status, reviewNote, reviewedAt: now, reviewedBy: actorId },
+        include: DETAIL_INCLUDE,
+      });
+      await tx.calendarAudit.create({
+        data: {
+          villaId: id,
+          actorId,
+          entityType: 'VILLA',
+          entityId: id,
+          action: 'VILLA_STATUS_CHANGED',
+          reason: reviewNote,
+          before: { status: villa.status },
+          after: { status },
+        },
+      });
+      return updated;
     });
   }
 
   /** Host kendi villasını incelemeye gönderir: DRAFT/REJECTED → PENDING_REVIEW. */
   async submitForReview(id: string, hostId: string) {
-    const villa = await this.getScoped(id, hostId);
-    if (villa.images.length < 15) {
-      throw new BadRequestException('Gönderebilmek için en az 15 fotoğraf yüklemelisiniz.');
-    }
-    return this.prisma.villa.update({
-      where: { id },
-      data: { status: 'PENDING_REVIEW' },
-      include: DETAIL_INCLUDE,
+    return this.occupancy.withVillaLock(id, async (tx) => {
+      await this.assertVillaScope(tx, id, hostId);
+      const villa = await tx.villa.findUniqueOrThrow({ where: { id }, select: { status: true, _count: { select: { images: true } } } });
+      if (villa._count.images < 15) {
+        throw new BadRequestException('Gönderebilmek için en az 15 fotoğraf yüklemelisiniz.');
+      }
+      const updated = await tx.villa.update({ where: { id }, data: { status: 'PENDING_REVIEW' }, include: DETAIL_INCLUDE });
+      await tx.calendarAudit.create({
+        data: {
+          villaId: id,
+          actorId: hostId,
+          entityType: 'VILLA',
+          entityId: id,
+          action: 'VILLA_STATUS_CHANGED',
+          before: { status: villa.status },
+          after: { status: 'PENDING_REVIEW' },
+        },
+      });
+      return updated;
     });
   }
 
@@ -652,6 +722,7 @@ export class VillasService {
     villaId: string,
     input: { startDate: string; endDate: string; pricePerNight: number; minNights?: number },
     hostId?: string,
+    actorId?: string,
   ) {
     const startDate = parseCalendarDate(input.startDate);
     const endDate = parseCalendarDate(input.endDate);
@@ -662,17 +733,49 @@ export class VillasService {
         where: { villaId, startDate: { lt: endDate }, endDate: { gt: startDate } },
       });
       if (overlap) throw new BadRequestException('Bu tarih aralığı mevcut bir fiyat kuralıyla çakışıyor.');
-      return tx.villaPriceRule.create({
+      const rule = await tx.villaPriceRule.create({
         data: { villaId, startDate, endDate, pricePerNight: input.pricePerNight, minNights: input.minNights },
       });
+      await tx.calendarAudit.create({
+        data: {
+          villaId,
+          actorId,
+          entityType: 'PRICE_RULE',
+          entityId: rule.id,
+          action: 'PRICE_RULE_CREATED',
+          after: {
+            startDate: formatCalendarDate(rule.startDate),
+            endDate: formatCalendarDate(rule.endDate),
+            pricePerNight: rule.pricePerNight,
+            minNights: rule.minNights,
+          },
+        },
+      });
+      return rule;
     });
   }
 
-  async removePriceRule(villaId: string, ruleId: string, hostId?: string) {
+  async removePriceRule(villaId: string, ruleId: string, hostId?: string, actorId?: string) {
     return this.occupancy.withVillaLock(villaId, async (tx) => {
       await this.assertVillaScope(tx, villaId, hostId);
       await this.assertChild(tx.villaPriceRule, ruleId, villaId, 'Fiyat kuralı');
+      const rule = await tx.villaPriceRule.findUniqueOrThrow({ where: { id: ruleId } });
       await tx.villaPriceRule.delete({ where: { id: ruleId } });
+      await tx.calendarAudit.create({
+        data: {
+          villaId,
+          actorId,
+          entityType: 'PRICE_RULE',
+          entityId: rule.id,
+          action: 'PRICE_RULE_REMOVED',
+          before: {
+            startDate: formatCalendarDate(rule.startDate),
+            endDate: formatCalendarDate(rule.endDate),
+            pricePerNight: rule.pricePerNight,
+            minNights: rule.minNights,
+          },
+        },
+      });
       return { ok: true };
     });
   }
@@ -681,6 +784,7 @@ export class VillasService {
     villaId: string,
     input: { startDate: string; endDate: string; kind?: VillaBlockedDateKind; note?: string },
     hostId?: string,
+    actorId?: string,
   ) {
     const startDate = parseCalendarDate(input.startDate);
     const endDate = parseCalendarDate(input.endDate);
@@ -697,21 +801,62 @@ export class VillasService {
         select: { id: true },
       });
       if (booking) throw new ConflictException('Bu tarihler aktif bir rezervasyonla çakışıyor.');
-      return tx.villaBlockedDate.create({
+      const block = await tx.villaBlockedDate.create({
         data: { villaId, startDate, endDate, kind: input.kind ?? 'MANUAL', note: input.note },
       });
+      await tx.calendarAudit.create({
+        data: {
+          villaId,
+          actorId,
+          entityType: 'BLOCK',
+          entityId: block.id,
+          action: 'BLOCK_CREATED',
+          reason: block.note,
+          after: {
+            startDate: formatCalendarDate(block.startDate),
+            endDate: formatCalendarDate(block.endDate),
+            kind: block.kind,
+            state: block.state,
+          },
+        },
+      });
+      return block;
     });
   }
 
-  async removeBlockedDate(villaId: string, blockId: string, hostId?: string) {
+  async removeBlockedDate(
+    villaId: string,
+    blockId: string,
+    expectedVersion: number,
+    hostId?: string,
+    actorId?: string,
+  ) {
     return this.occupancy.withVillaLock(villaId, async (tx, now) => {
       await this.assertVillaScope(tx, villaId, hostId);
       const block = await tx.villaBlockedDate.findUnique({ where: { id: blockId } });
       if (!block || block.villaId !== villaId) throw new NotFoundException('Bloke tarih bulunamadı.');
+      if (block.version !== expectedVersion) {
+        throw new ConflictException({
+          message: 'Takvim kaydı başka bir işlem tarafından değiştirildi. Sayfayı yenileyin.',
+          code: 'VERSION_CONFLICT',
+        });
+      }
       if (block.state === 'ACTIVE') {
-        await tx.villaBlockedDate.update({
+        const updated = await tx.villaBlockedDate.update({
           where: { id: blockId },
-          data: { state: 'RELEASED', releasedAt: now },
+          data: { state: 'RELEASED', releasedAt: now, version: { increment: 1 } },
+        });
+        await tx.calendarAudit.create({
+          data: {
+            villaId,
+            actorId,
+            entityType: 'BLOCK',
+            entityId: block.id,
+            action: 'BLOCK_RELEASED',
+            reason: block.note,
+            before: { state: block.state, version: block.version },
+            after: { state: updated.state, version: updated.version },
+          },
         });
       }
       return { ok: true };

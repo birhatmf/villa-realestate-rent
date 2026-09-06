@@ -165,7 +165,13 @@ export default async function VillaDetailPage({ params }: { params: Promise<{ sl
             </Section>
 
             <Section title="Müsaitlik Takvimi">
-              <AvailabilityCalendar blockedDates={villa.blockedDates} />
+              <AvailabilityCalendar
+                slug={villa.slug}
+                blockedDates={villa.blockedDates}
+                maxAdults={villa.maxAdults}
+                maxChildren={villa.maxChildren}
+                maxInfants={villa.maxInfants}
+              />
             </Section>
           </div>
 
